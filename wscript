@@ -11,4 +11,4 @@ def build(bld):
   obj = bld.new_task_gen("cxx", "shlib", "node_addon")
   obj.cxxflags = ["-g", "-D_FILE_OFFSET_BITS=64", "-D_LARGEFILE_SOURCE", "-Wall"]
   obj.target = "imap_parser"
-  obj.source = "node_imap_parser.cc"
+  obj.source = ["node_imap_parser.cc", "imap_parser.cc"]
