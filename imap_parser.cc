@@ -14,6 +14,7 @@ enum parser_state {
   s_response_data_end,
   s_response_done,
   s_response_fatal,
+  s_response_fatal_end,
   s_response_tagged,
   s_response_data_crlf,
 
@@ -299,8 +300,13 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
       case s_response_fatal:
-//        if (c == ' ') state = 
-        
+        if (c == ' ') {
+          NEXT_STATE_PUSH(s_response_fatal_end);
+          state = s_resp_cond_bye;
+          index = 0;
+        }
+        else ERR();
+        break;
 
       case s_response_data:
         if(c == ' ') state = s_response_data_options;
@@ -355,17 +361,14 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           BAD | BYE
         */
         GIVEN(c == 'A', s_resp_cond_state);
-        else GIVEN(c == 'Y', s_resp_cond_bye);
+        else if (c == 'Y') {
+          state = s_resp_cond_bye;
+          NEXT_STATE_PUSH(s_resp_text);
+        }
         else ERR();
 
         index++;
 
-        break;
-
-      case s_response_data_end:
-        break;
-
-      case s_resp_mailbox_or_message_data:
         break;
       case s_resp_cond_state:
         if (cur_string == STR_UNKNOWN) {
@@ -388,7 +391,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else if (c == strings[cur_string][index]) {
           index++;
         }
-        else if (c == ' ') {
+        else if (c == ' ' && strings[cur_string][index] == '\0') {
           state = s_resp_text;
         }
         else {
@@ -400,7 +403,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       case s_resp_cond_bye:
         str = strings[STR_BYE];
         if (c == ' ' && str[index] == '\0') {
-          state = s_resp_text;
+          state = NEXT_STATE_POP();
           index = 0;
         }
         else if (c == str[index]) {
@@ -520,13 +523,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else ERR();
         break;
-      case s_resp_text_code_permanentflags:
-
-        break;
-      case s_resp_text_code_flag_perm:
-        break;
-      case s_resp_text_code_u:
-        break;
       case s_resp_text_code_atom:
         if (index == 0) {
           // MARK start
@@ -545,16 +541,17 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else ERR();
         break;
 
+      case s_response_data_end:
+      case s_resp_mailbox_or_message_data:
+      case s_resp_text_code_u:
+      case s_resp_text_code_permanentflags:
+      case s_resp_text_code_flag_perm:
       case s_capability_data:
+      case s_continue_req:
+      case s_mailbox_data:
+        ERR();
         break;
       case s_parse_error:
-        break;
-
-
-
-      case s_continue_req:
-        break;
-      case s_mailbox_data:
         break;
     }
 
