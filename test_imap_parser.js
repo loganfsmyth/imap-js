@@ -49,11 +49,7 @@ module.exports = testCase({
     resp_cond_bye: {
       correct: function(test) {
         test.doesNotThrow(function() {
-          try {
-            runner('* BYE misc test\r\n')();
-          } catch (e) {
-            console.log(e);
-          }
+          runner('* BYE misc test\r\n')();
         });
         test.done();
       },

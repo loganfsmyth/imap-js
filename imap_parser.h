@@ -30,7 +30,7 @@ typedef int (*imap_data_cb) (imap_parser*, const char*, size_t);
 typedef int (*imap_cb) (imap_parser*);
 
 struct imap_parser_settings {
-//  http_data_cb 
+  imap_data_cb 
 
 };
 

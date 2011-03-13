@@ -92,26 +92,34 @@ static const char *strings[] = {
 
 };
 
-#define IS_CHAR(c) (c > 0x01 && c <= 0x7F)
-#define IS_CTL(c) (c <= 0x1F || c == 0x7F)
-#define IS_DQUOTE(c) (c == 0x22)
+
+
+
+#define IS_ALPHA(c) ( (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) )
 #define IS_DIGIT(c) (c >= 0x30 && c <= 0x39)
+#define IS_HEXDIG(c) (IS_DIGIT(c) || (c >= 0x41 && c  <= 0x50))
+#define IS_DQUOTE(c) (c == 0x22)
 #define IS_SP(c) (c == 0x20)
+#define IS_HTAB(c) (c == 0x09)
+#define IS_WSP(c) (IS_SP(c) || IS_HTAB(c))
+#define IS_VCHAR(c) (c >= 0x21 && c <= 0x7E)
+#define IS_CHAR(c) (c > 0x01 && c <= 0x7F)
+#define IS_OCTET(c) (c >= 0x00 && c <= 0xFF)
+#define IS_CTL(c) (c <= 0x1F || c == 0x7F)
 #define IS_CR(c) (c == 0x0D)
 #define IS_LF(c) (c == 0x0A)
 
-#define IS_CHAR8(c) (c != 0x00)
-
+#define IS_CHAR8(c) (c >= 0x01 && c <= 0xFF)
 
 #define IS_TEXT_CHAR(c) (c != '\n' && c != '\r' && IS_CHAR(c))
 #define IS_RESP_SPECIAL(c) (c == ']')
 #define IS_QUOTED_SPECIAL(c) (c == '\\' || c == '"')
 #define IS_LIST_WILDCARD(c) (c == '%' || c == '*')
-
 #define IS_ATOM_SPECIAL(c) (c == '(' || c == ')' || c == '{' || c == ' ' || IS_CTL(c) || IS_RESP_SPECIAL(c) || IS_QUOTED_SPECIAL(c) || IS_LIST_WILDCARD(c))
 #define IS_ATOM_CHAR(c) (IS_CHAR(c) && !IS_ATOM_SPECIAL(c))
 #define IS_ASTRING_CHAR(c) (IS_RESP_SPECIAL(c) || IS_ATOM_CHAR(c))
-#define IS_QUOTED_CHAR(c, prev) ((IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c)) || (prev == '\\' && IS_QUOTED_SPECIAL(c)))
+
+//#define IS_QUOTED_CHAR(c, prev) ((IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c)) || (prev == '\\' && IS_QUOTED_SPECIAL(c)))
 
 
 enum string_state {
