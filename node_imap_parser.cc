@@ -78,8 +78,14 @@ public:
     Local<Integer> parsed_amount_val = Integer::New(parsed_amount);
     if (parsed_amount != length) {
       Local<Value> e = Exception::Error(String::NewSymbol("Parse Error"));
+
+
+      e->ToObject()->Set(String::NewSymbol("attemptedBytes"), Integer::New(length));
       e->ToObject()->Set(String::NewSymbol("bytesParsed"), parsed_amount_val);
-      return scope.Close(e);
+      e->ToObject()->Set(String::NewSymbol("parsedTo"), String::New(buffer_data, parsed_amount));
+      e->ToObject()->Set(String::NewSymbol("failureState"), Integer::New(self->parser.state));
+
+      return ThrowException(e);
     }
     else {
       return scope.Close(parsed_amount_val);

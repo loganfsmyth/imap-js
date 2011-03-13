@@ -10,9 +10,20 @@ extern "C" {
 #include <sys/types.h>
 
 struct imap_parser {
+  unsigned char state;
+  unsigned char next_states[10];
+  unsigned short num_next_states;
+
+
+
+  unsigned char cur_string;
+  unsigned char str_state;
+
+
+  unsigned int last_char;
+  unsigned int index;
+
   void* data;
-
-
 };
 
 typedef int (*imap_data_cb) (imap_parser*, const char*, size_t);
