@@ -65,12 +65,12 @@ function getCommandTag (count) {
 
 
 
-var ImapClient = exports.ImapClient = function(host, port, secure, callback) {
+var ImapClient = exports.ImapClient = function(host, port) {
   EventEmitter.call(this);
 
   var self = this;
   var untagged = [];
-  var tag_counter = 0;
+  var tag_counter = 1;
 
   var responseCallbacks = {};
   var continuationQueue = [];
@@ -99,12 +99,13 @@ var ImapClient = exports.ImapClient = function(host, port, secure, callback) {
   };
 
 
-  con.on('connect', function onconnect() {
+  self.con.on('connect', function onconnect() {
     self.emit('connect');
   });
 
-  con.on('data', function(d) {
-    self.parser.execute(d);
+  self.con.on('data', function(d) {
+    console.log('Totally parsing: ' + d.toString('utf8'));
+//    self.parser.execute(d);
   });
 
 
@@ -116,8 +117,10 @@ var ImapClient = exports.ImapClient = function(host, port, secure, callback) {
     }
 
     responseCallbacks[tag] = command.response;
+//    var com = tag + ' ' + command.command + "\r\n";
+//    console.log(com);
+    self.con.write(tag + ' ' + command.command + "\r\n");
 
-    self.con.write(tag + ' ' + command.command);
   }
 
 
@@ -156,10 +159,26 @@ ImapClient.prototype.logout = function(cb) {
  * Client Commands - Not Authenticated
  */
 ImapClient.prototype.starttls = function(cb) {
+  var self = this;
   this.enqueueCommand({
     command: 'STARTTLS',
     response: function(type, text, response) {
-      //TODO: work TLS negotiation in here, then call cb
+      if (type == 'OK') {
+        var pair = new tls.createSecurePair();
+        var old_listeners = self.con.listeners('data');
+        self.con.removeAllListeners('data');
+        self.con = pipe(pair, self.con);
+        old_listeners.forEach(function(func) {
+          self.con.on('data', func);
+        });
+        
+        pair.on('secure', function() {
+          cb(type, text, response);
+        });
+      }
+      else {
+          cb(type, text, response);
+      }
     },
   });
 }
