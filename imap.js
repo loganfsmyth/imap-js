@@ -6,18 +6,8 @@ var ImapParser = require('./imap_parser').ImapParser,
     net = require('net');
 
 
-var ImapClient = exports.ImapClient = function(host, port, callback) {
-  EventEmitter.call(this);
-
-  //tls.connect(port, host, callback);
-
-  var con = net.createConnection(port, host);
-  con.setKeepAlive();
-
-  var state = 0;
-
-  con.on('data', function(d) {
-    switch(state) {
+function processData(d) {
+   switch(state) {
       case 0:
         console.log(d.toString('utf8'));
         con.write('a001 STARTTLS\r\n');
@@ -33,7 +23,7 @@ var ImapClient = exports.ImapClient = function(host, port, callback) {
           console.log('secure' + pair._ssl.verifyError());
 
           clearcon.write('a001 CAPABILITY\r\n');
-//          clearcon.write('a002 LOGIN me@logansmyth.com pass\r\n'); // LOGIN
+          clearcon.write('a002 LOGIN me@logansmyth.com pass\r\n'); // LOGIN
           clearcon.write('a003 EXAMINE INBOX\r\n');
         });
         
@@ -49,16 +39,352 @@ var ImapClient = exports.ImapClient = function(host, port, callback) {
         console.log('enc')
         console.log(d);
     }
+}
+
+
+var tagChars = new Array(0x7E);
+for (var i = 0x01; i <= 0x7F; i++) {
+  tagChars[i-1] = String.fromCharCode(i);
+}
+tagChars = tagChars.filter(function(c) {
+  return !(c == '(' || c == ')' || c == '{' || c == ' ' || c == '\\' || c == '"' || c == '%' || c == '*' || c == '+')
+          && ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')); // For readability
+});
+
+var len = tagChars.length;
+
+function getCommandTag (count) {
+  var tag = '';
+  while(count >= 1) {
+    var l = Math.floor(count%len);
+    tag = tagChars[l] + tag;
+    count /= len;
+  }
+  return tag;
+};
+
+
+
+var ImapClient = exports.ImapClient = function(host, port, secure, callback) {
+  EventEmitter.call(this);
+
+  var self = this;
+  var untagged = [];
+  var tag_counter = 0;
+
+  var responseCallbacks = {};
+  var continuationQueue = [];
+
+  self.con = net.createConnection(port, host);
+  self.con.setKeepAlive();
+
+  var parser = new ImapParser();
+
+  parser.onContinuation = function(text) {
+    var handler = self.continuationQueue.shift();
+    if (!handler(text)) {
+      // return false means it is not done
+      self.continuationQueue.unshift(handler);
+    }
+  };
+  parser.onUntagged = function(text) {
+    untagged.push(text);
+  };
+  parser.onTagged = function(tag, type, text) {
+    if (responseCallbacks[tag]) {
+      responseCallbacks[tag](type, text, untagged);
+      untagged = [];
+      delete responseCallbacks[tag];
+    }
+  };
+
+
+  con.on('connect', function onconnect() {
+    self.emit('connect');
   });
+
+  con.on('data', function(d) {
+    self.parser.execute(d);
+  });
+
+
+  self.enqueueCommand = function(command) {
+    var tag = getCommandTag(tag_counter++);
+
+    if (command.continuation) {
+      continuationQueue.push(command.continuation);
+    }
+
+    responseCallbacks[tag] = command.response;
+
+    self.con.write(tag + ' ' + command.command);
+  }
+
 
 
 }
 util.inherits(ImapClient, EventEmitter);
 
 
+/**
+ * Client Commands - Any State
+ */
+ImapClient.prototype.capability = function(cb) {
+  this.enqueueCommand({
+    command: 'CAPABILITY',
+    result: function(type, text, response) {
+      
+    },
+  });
+}
+
+ImapClient.prototype.noop = function(cb) {
+  this.enqueueCommand({
+    command: 'NOOP',
+    result: cb,
+  });
+}
+
+ImapClient.prototype.logout = function(cb) {
+  this.enqueueCommand({
+    command: 'LOGOUT',
+    result: cb,
+  });
+}
+
+/**
+ * Client Commands - Not Authenticated
+ */
+ImapClient.prototype.starttls = function(cb) {
+  this.enqueueCommand({
+    command: 'STARTTLS',
+    response: function(type, text, response) {
+      //TODO: work TLS negotiation in here, then call cb
+    },
+  });
+}
+
+ImapClient.prototype.authenticate = function(auth_mechanism, cb) {
+  this.enqueueCommand({
+    command: 'AUTHENTICATE',
+    continuation: function(text) {
+
+
+    },
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.login = function(user, pass, cb) {
+  this.enqueueCommand({
+    command: 'LOGIN',
+    response: cb
+  });
+}
+
+
+/**
+ * Client Commands - Authenticated
+ */
+
+ImapClient.prototype.select = function(mailbox, cb) {
+  this.enqueueCommand({
+    command: 'SELECT ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.examine = function(mailbox, cb) {
+  this.enqueueCommand({
+    command: 'EXAMINE ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.create = function(mailbox, cb) {
+  this.enqueueCommand({
+    command: 'CREATE ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.delete = function(mailbox, cb) {
+  this.enqueueCommand({
+    command: 'DELETE ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.rename = function(current_mailbox, new_mailbox, cb) {
+  this.enqueueCommand({
+    command: 'RENAME ' + current_mailbox + ' ' + new_mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.subscribe = function(mailbox, cb) {
+  this.enqueueCommand({
+    command: 'SUBSCRIBE ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.unsubscribe = function(mailbox, cb) {
+  this.enqueueCommand({
+    command: 'UNSUBSCRIBE ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.list = function(ref_name, mailbox /* w/ wildcards */, cb) {
+  //TODO: Preprocessing args?
+  this.enqueueCommand({
+    command: 'LIST ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.lsub = function(ref_name, mailbox /* w/ wildcards */, cb) {
+  //TODO: preprocess
+  this.enqueueCommand({
+    command: 'LSUB ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.status = function(mailbox, item_names, cb) {
+  //TODO items 
+  this.enqueueCommand({
+    command: 'STATUS ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.append = function(mailbox, flag_list, datetime, message, cb) {
+  //TODO: process flags
+  this.enqueueCommand({
+    command: 'APPEND ' + mailbox,
+    continuation: function(text) {
+
+
+    },
+    response: function(type, text, response) {
+
+    },
+  });
+
+
+}
+
+/**
+ * Client Commands - Selected
+ */
+ImapClient.prototype.check = function(cb) {
+    this.enqueueCommand({
+    command: 'CHECK',
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.close = function(cb) {
+    this.enqueueCommand({
+    command: 'CLOSE',
+    response: function(type, text, response) {
+
+    },
+  });
+
+
+}
+
+ImapClient.prototype.expunge = function(cb) {
+    this.enqueueCommand({
+    command: 'EXPUNGE ' + mailbox,
+    response: function(type, text, response) {
+
+    },
+  });
+
+
+}
+
+ImapClient.prototype.search = function(charset, criteria, cb) {
+  this.enqueueCommand({
+    command: 'SEARCH ' + charset + ' ' + criteria, //TODO process args
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.fetch = function(seq_set, item_names, cb) {
+  this.enqueueCommand({
+    command: 'FETCH ' + seq_set,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.store = function(seq_set, item_name, value, cb) {
+  this.enqueueCommand({
+    command: 'STORE ' + seq_set,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.copy = function(seq_set, mailbox, cb) {
+  this.enqueueCommand({
+    command: 'COPY ' + seq_set,
+    response: function(type, text, response) {
+
+    },
+  });
+}
+
+ImapClient.prototype.uid = function(command, args, cb) {
+  this.enqueueCommand({
+    command: 'UID ' + command + args.join(' '),
+    response: function(type, text, response) {
+
+    },
+  });
+}
 
 
 
+
+
+
+
+
+//  Copied directly from node's lib/tls.js
 function pipe(pair, socket) {
   pair.encrypted.pipe(socket);
   socket.pipe(pair.encrypted);
