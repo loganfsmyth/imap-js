@@ -26,12 +26,19 @@ enum parser_state {
   s_resp_text_start,
   s_resp_text_code_start,
   s_resp_text_code,
+  s_resp_text_code_almost_done,
   s_resp_text_code_done,
   s_resp_text_code_atom,
   s_resp_text_code_atom_test,
-  s_resp_text_code_badcharset_args,
+  s_resp_text_code_badcharset_args_start,
+  s_resp_text_code_badcharset_args_done,
   s_text_start,
   s_text,
+
+  s_astring_start,
+  s_astring,
+  s_literal_start,
+  s_quoted_start,
 
   s_nz_number,
   s_flag_permanent,
@@ -285,7 +292,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
             switch (cur_string) {
               case STR_BADCHARSET:
                 if (c == ' ') {
-                  state = s_resp_text_code_badcharset_args;
+                  state = s_resp_text_code_badcharset_args_start;
                   break;
                 }
               case STR_ALERT:
@@ -323,12 +330,31 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         break;
 
+      case s_resp_text_code_almost_done:
+        if (c != ']') ERR();
+        state = s_resp_text_code_done;
+        break;
       case s_resp_text_code_done:
         if (c != ' ') ERR();
         state = s_text_start;
         break;
 
-      
+      // Parse badcharset args: "(" astring *(SP astring) ")"
+      case s_resp_text_code_badcharset_args_start:
+        if (c != '(') ERR();
+        state = s_astring_start;
+        break;
+      case s_resp_text_code_badcharset_args_done:
+        if (c == ' ') {
+          state = s_astring_start;
+        }
+        else {
+          if (c != ')') ERR();
+          state = s_resp_text_code_almost_done;
+        }
+        break;
+
+      // Parse capability args *(SP atom)
       case s_capability_data_start:
         if (c != ' ') {
           state = s_resp_text_code_done; // TODO: this needs to be different for untagged
@@ -380,6 +406,27 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         index++;
         break;
 
+      case s_astring_start:
+        switch (c) {
+          case '{': state = s_literal_start; break;
+          case '"': state = s_quoted_start; break;
+          default:
+            if (!IS_ASTRING_CHAR(c)) ERR();
+            state = s_astring;
+            str_start = p;
+            break;
+        }
+        p--;
+        break;
+
+      case s_astring:
+        if (!IS_ASTRING_CHAR(c)) {
+          PRN("ASTRING", str_start, p);
+          state = s_resp_text_code_badcharset_args_done;
+          p--;
+        }
+        break;
+
       case s_check_crlf:
         if (c == '\r') {
           state = s_check_lf;
@@ -407,6 +454,13 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
   return len;
 
 parse_error:
+
+  parser->state = state;
+  parser->next_state = next_state;
+  parser->index = index;
+  parser->cur_string = cur_string;
+  parser->last_char = last_char;
+
 //  parser->state = s_parse_error;
   return (p-data);
 }

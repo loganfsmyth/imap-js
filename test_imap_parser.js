@@ -22,11 +22,15 @@ module.exports = testCase({
   response_data: {
     resp_cond_state: {
       cap: function(test) {
+        test.doesNotThrow(runner("a001 OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE STARTTLS LOGINDISABLED] Dovecot ready.\r\n"));
+        test.done();
+      },
+      badcharset: function(test) {
         test.doesNotThrow(function() {
-          try{
-            runner("a001 OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE STARTTLS LOGINDISABLED] Dovecot ready.\r\n")();
+          try {
+            runner("a001 OK [BADCHARSET (OMG WHAT HAHAH)] OH YEAH\r\n")();
           }
-          catch(e) {
+          catch (e) {
             console.log(e);
           }
         });
