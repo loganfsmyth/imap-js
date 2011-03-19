@@ -40,6 +40,7 @@ enum parser_state {
   s_literal_start,
   s_quoted_start,
 
+  s_nz_number_start,
   s_nz_number,
   s_permanentflags_args_start,
   s_permanentflags_args_almost_start,
@@ -313,7 +314,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
               case STR_UIDVALIDITY:
               case STR_UNSEEN:
                 if (c == ']') ERR();
-                state = s_nz_number;
+                state = s_nz_number_start;
                 PRN("TEXTCODE", str_start, p);
                 break;
               case STR_PERMANENTFLAGS:
@@ -484,6 +485,21 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
         }
         break;
+
+      case s_nz_number_start:
+        if (c < '0' || c > '9') ERR();
+        state = s_nz_number;
+        str_start = p;
+        break;
+      case s_nz_number:
+        if (!IS_DIGIT(c)) {
+          state = s_resp_text_code_almost_done;
+          PRN("NZNUM", str_start, p);
+          p--;
+          break;
+        }
+        break;
+        
 
       case s_check_crlf:
         if (c == '\r') {

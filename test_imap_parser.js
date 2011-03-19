@@ -58,6 +58,18 @@ module.exports = testCase({
         });
         test.done();
       },
+      unseen: function(test) {
+        test.doesNotThrow(function() {
+          try {
+            runner("a001 OK [UNSEEN 10] OH YEAH\r\n")();
+          }
+          catch (e) {
+            console.log(e);
+          }
+        });
+        test.done();
+      },
+
 
       bad : function(test) {
         test.doesNotThrow(runner('a001 BAD [READ-ONLY] Failure\r\n'));
