@@ -114,7 +114,7 @@ var ImapClient = exports.ImapClient = function(host, port, secure, cb) {
   var c = 0;
   self.con.on('data', function(d) {
     console.log('Totally parsing: ' + d.toString('utf8'));
-    self.parser.execute(d);
+    self.parser.execute(d, 0, d.length);
   });
 
 

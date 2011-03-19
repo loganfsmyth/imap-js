@@ -8,7 +8,7 @@ function runner(str) {
   var b = new Buffer(str);
 
   return function() {
-    return p.execute(b, 0, b.length-1);
+    return p.execute(b, 0, b.length);
   }
 }
 
@@ -22,27 +22,29 @@ module.exports = testCase({
   response_data: {
     resp_cond_state: {
       bad : function(test) {
-        test.doesNotThrow(runner('a001 BAD Failure'));
-        test.done();
+        test.doesNotThrow(runner('a001 BAD Failure\r\n'));
+        setTimeout( function() {
+          test.done();
+        }, 500);
       },
       ok : function(test) {
-        test.doesNotThrow(runner('a001 OK Failure'));
+        test.doesNotThrow(runner('a001 OK Failure\r\n'));
         test.done();
       },
       no : function(test) {
-        test.doesNotThrow(runner('a001 NO Failure'));
+        test.doesNotThrow(runner('a001 NO Failure\r\n'));
         test.done();
       },
       bye : function(test) {
-        test.throws(runner('a001 BYE Failure'));
+        test.throws(runner('a001 BYE Failure\r\n'));
         test.done();
       },
       b : function(test) {
-        test.throws(runner('a001 B Failure'));
+        test.throws(runner('a001 B Failure\r\n'));
         test.done();
       },
       random : function(test) {
-        test.throws(runner('a001 hfbgfd Failure'));
+        test.throws(runner('a001 hfbgfd Failure\r\n'));
         test.done();
       },
     },

@@ -5,6 +5,7 @@
 
 #include "imap_parser.h"
 
+#include <string.h>
 
 using namespace node;
 using namespace v8;
@@ -62,13 +63,18 @@ public:
     char* buffer_data = Buffer::Data(buffer);
     size_t buffer_len = Buffer::Length(buffer);
 
+    char* to = strndup(buffer_data, buffer_len);
+
+
     size_t offset = args[1]->Int32Value();
     size_t length = args[2]->Int32Value();
+    
+//    printf("==%s== %d vs %d\n",to, buffer_len, length);
 
     if (offset >= buffer_len) {
       return ThrowException(Exception::Error(String::New("Offset larger than buffer")));
     }
-    if (offset + length >= buffer_len) {
+    if (offset + length > buffer_len) {
       return ThrowException(Exception::Error(String::New("Length from offset larger than buffer")));
     }
 

@@ -11,10 +11,7 @@ extern "C" {
 
 struct imap_parser {
   unsigned char state;
-  unsigned char next_states[10];
-  unsigned short num_next_states;
-
-
+  unsigned char next_state;
 
   unsigned char cur_string;
   unsigned char str_state;
@@ -30,7 +27,6 @@ typedef int (*imap_data_cb) (imap_parser*, const char*, size_t);
 typedef int (*imap_cb) (imap_parser*);
 
 struct imap_parser_settings {
-  imap_data_cb 
 
 };
 

@@ -4,41 +4,26 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 enum parser_state {
   s_parse_error = 1,
   s_response_start,
-  s_response_data,
-  s_response_data_options,
-  s_response_data_end,
-  s_response_done,
-  s_response_fatal,
-  s_response_fatal_end,
-  s_response_tagged,
-  s_response_data_crlf,
-
-  s_resp_cond_state,
-  s_resp_cond_bye,
-  s_resp_text,
-  s_resp_text_code,
-  s_resp_text_code_flag_perm,
-  s_resp_text_code_atom,
-  s_resp_text_code_badcharset,
-  s_resp_text_code_badcharset_str,
-  s_resp_text_code_permanentflags,
-  s_resp_text_code_u,
-  s_resp_text_code_done,
-  s_text,
-
-  s_capability_data,
-  s_mailbox_data,
-  s_resp_state_or_bye,
-  s_resp_mailbox_or_message_data,
-
-
-
   s_continue_req,
+  s_response_data,
+  s_response_tagged_start,
+  s_tag_start,
+  s_tag,
+  s_response_tagged_mid,
+  s_resp_cond_state,
+  s_check_crlf,
+  s_check_lf,
+  s_resp_text,
+  s_resp_text_start,
+  s_resp_text_code,
+  s_text_start,
+  s_text,
 
 };
 
@@ -93,8 +78,6 @@ static const char *strings[] = {
 };
 
 
-
-
 #define IS_ALPHA(c) ( (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) )
 #define IS_DIGIT(c) (c >= 0x30 && c <= 0x39)
 #define IS_HEXDIG(c) (IS_DIGIT(c) || (c >= 0x41 && c  <= 0x50))
@@ -121,149 +104,39 @@ static const char *strings[] = {
 
 //#define IS_QUOTED_CHAR(c, prev) ((IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c)) || (prev == '\\' && IS_QUOTED_SPECIAL(c)))
 
-
-enum string_state {
-  str_none = 0,
-  str_astring,
-
-  str_quoted_char,
-  str_quoted_escaped,
-
-  str_literal_len,
-  str_literal_crlf,
-  str_literal_data,
-  str_nstring,
-};
-
-
-#define STR_LITERAL(c)                                                                              \
-  case str_literal_len:                                                                             \
-    if (bytes_remaining == -1) {                                                                    \
-      if(!IS_DIGIT(c)) ERR(); /* empty {} */                                                        \
-      else bytes_remaining = 0;                                                                     \
-    }                                                                                               \
-    if (IS_DIGIT(c)) {                                                                              \
-      bytes_remaining *= 10;                                                                        \
-      bytes_remaining += c-'0';                                                                     \
-    }                                                                                               \
-    else if (c == '}') {                                                                            \
-      str_state = str_literal_crlf;                                                                 \
-    }                                                                                               \
-    else ERR();                                                                                     \
-    break;                                                                                          \
-  case str_literal_crlf:                                                                            \
-    if (c == '\r' && index == 0) {                                                                  \
-      index++;                                                                                      \
-    }                                                                                               \
-    else if (c == '\n') {                                                                           \
-      index = 0;                                                                                    \
-      str_state = (bytes_remaining > 0)?str_literal_data:str_none; /* TODO MAYBE event w/ no data?*/\
-    }                                                                                               \
-    break;                                                                                          \
-  case str_literal_data:                                                                            \
-    amount = (bytes_remaining > pe-p)?(pe-p):bytes_remaining;                                       \
-    if (amount > 0) {                                                                               \
-      /* TODO: astring EVENT from p to amount */                                                    \
-      p += amount-1;                                                                                \
-      bytes_remaining -= amount;                                                                    \
-      if (bytes_remaining == 0) {                                                                   \
-        done = 1;                                                                                   \
-        str_state = str_none;                                                                       \
-      }                                                                                             \
-    }                                                                                               \
-    break;
-
-#define STR_QUOTED(c)                                     \
-  case str_quoted_char:                                   \
-    if (index == 1) {                                     \
-      /* TODO Mark start */                               \
-    }                                                     \
-    if (c == '\\') str_state = str_quoted_escaped;        \
-    else if (c == '"') {                                  \
-      /* Event from start */                              \
-      done = 1;                                           \
-      str_state = str_none;                               \
-    }                                                     \
-    else if (!IS_TEXT_CHAR(c) || IS_QUOTED_SPECIAL(c)) {  \
-      ERR();                                              \
-    }                                                     \
-    break;                                                \
-  case str_quoted_escaped:                                \
-    if (IS_QUOTED_SPECIAL(c)) str_state = str_quoted_char;\
-    else ERR();                                           \
-    break;
-
-
-#define STR_ASTRING_CHARS(c)    \
-  case str_astring:             \
-    if (index == 1) {           \
-      /* MARK Start */          \
-    }                           \
-    if (!IS_ASTRING_CHAR(c)) {  \
-      if (index == 0) ERR();    \
-      else {                    \
-        done = 1;               \
-        /* AString Event */     \
-        str_state = str_none;   \
-        p -= 1;  /*repeat*/     \
-      }                         \
-    }                           \
-    index++;
-
-
-#define ASTRING(c)                  \
-  done = 0;                         \
-  if (index == 0) {                 \
-    if (IS_DQUOTE(c)) {             \
-      str_state = str_quoted_char;  \
-      break;                        \
-    }                               \
-    else if (c == '{') {            \
-      str_state = str_literal_len;  \
-      break;                        \
-    }                               \
-    else {                          \
-      str_state = str_astring;      \
-    }                               \
-                                    \
-    index++;                        \
-  }                                 \
-  switch (str_state) {              \
-    STR_LITERAL(c);                 \
-    STR_QUOTED(c);                  \
-    STR_ASTRING_CHARS(c);           \
-    case str_nstring:               \
-    case str_none:                  \
-      break;                        \
-  }
-
-
+#define PRN(start, end)   \
+do {    \
+  char* to = strndup(start, (end-start)); \
+  printf("%s\n", to);   \
+  free(to);     \
+} while(0)      
 
 
 void imap_parser_init(imap_parser* parser) {
-  parser->num_next_states = 0;
-  NEXT_STATE_PUSH(s_parse_error); // if we pop too much, get a parse error :)
   parser->state = s_response_start;
+  parser->next_state = s_parse_error; // if we pop too much, get a parse error :)
   parser->cur_string = STR_UNKNOWN;
+  parser->index = 0;
+  parser->last_char = '\0';
 }
 
 
 size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, const char* data, size_t len) {
 
   enum parser_state state = (enum parser_state)parser->state;
+  enum parser_state next_state = (enum parser_state)parser->next_state;
   unsigned int index = parser->index;
   enum string_ref cur_string = (enum string_ref)parser->cur_string;
   char last_char = parser->last_char;
 
-  enum string_state str_state = (enum string_state)parser->str_state;
   unsigned int bytes_remaining = -1;
   char done;
 
   char c;
-  const char *p, *pe;
+  const char *p, *pe, *str;
 
-  char* tag_start;
-  const char* str;
+  const char* str_start;
+
   size_t amount;
 
   for (p = data, pe = data+len; p != pe; p++ ) {
@@ -271,295 +144,115 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
     switch(state) {
       case s_response_start:
-        if (c == '*') state = s_response_data;
-        else if(c == '+') state = s_continue_req;
-
-
-        if (c == '*' || c == '+') {
-          NEXT_STATE_PUSH(s_response_done);
-          break;
-        }
-
-        state = s_response_done;
-        // FALL THROUGH
-
-      case s_response_done:
-        if (c == '*') {
-          state = s_response_fatal;
-          break;
-        }
-
-        state = s_response_tagged;
-
-        // FALL THROUGH
-      case s_response_tagged:
-        if (index == 0) {
-          //TODO: MARK TAG START
-        }
-        if (c == '+' || !IS_ASTRING_CHAR(c)) {
-          //TODO: TAGGED EVENT
-          if (c != ' ') {
-            ERR();
-          }
-          else {
-            state = s_resp_cond_state;
-          }
-        }
-        break;
-
-      case s_response_fatal:
-        if (c == ' ') {
-          NEXT_STATE_PUSH(s_response_fatal_end);
-          state = s_resp_cond_bye;
-          index = 0;
-        }
-        else ERR();
-        break;
-
-      case s_response_data:
-        if(c == ' ') state = s_response_data_options;
-        else ERR();
-        break;
-      case s_response_data_options:
-        /*
-        resp_cond_state // OK | NO | BAD
-        resp_cond_bye   // BYE
-        mailbox_data    // FLAGS | LIST | LSUB | SEARCH | STATUS | [int] | [int]
-        message_data    // [nz-int]
-        capability_data // CAPABILITY
-        */
         switch (c) {
-          case 'O':
-          case 'N':
-            state = s_resp_cond_state;
-            break;
-          case 'C':
-            state = s_capability_data;
-            break;
-          case 'F':
-          case 'L':
-          case 'S':
-          case '0':
-            state = s_mailbox_data;
-            break;
-          case 'B':
-            state = s_resp_state_or_bye;
-            break;
-          case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-            state = s_resp_mailbox_or_message_data;
-            break;
-          default:
-            ERR();
-            break;
+          case '+':  state = s_continue_req;  ERR(); break;
+          case '*':  state = s_response_data;  ERR(); break;
+          default :  state = s_response_tagged_start;  break;
         }
-
-        index++;
-
+        p--;
         break;
-      case s_response_data_crlf:
-        if (c == '\r' && index == 0){
+      case s_response_tagged_start:
+      case s_tag_start:
+        index = 0;
+        state = s_tag;
+        str_start = p;
+        // fall through
+      case s_tag:
+        if (IS_ASTRING_CHAR(c) && c != '+') {
           index++;
         }
-        if (c == '\n') {
-          // CLOSED CONNECTION
-        }
-        break;
-      case s_resp_state_or_bye:
-        /*
-          BAD | BYE
-        */
-        GIVEN(c == 'A', s_resp_cond_state);
-        else if (c == 'Y') {
-          state = s_resp_cond_bye;
-          NEXT_STATE_PUSH(s_resp_text);
-        }
-        else ERR();
-
-        index++;
-
-        break;
-      case s_resp_cond_state:
-        if (cur_string == STR_UNKNOWN) {
-          switch(c) {
-            case 'O':
-              cur_string = STR_OK;
-              break;
-            case 'N':
-              cur_string = STR_NO;
-              break;
-            case 'B':
-              cur_string = STR_BAD;
-              break;
-            default:
-              ERR();
-              break;
+        else {
+          if (index == 0) ERR();
+          else {
+            printf("TAG => ");
+            PRN(str_start, p);
+            state = s_response_tagged_mid;
+            p--;
           }
-          index = 1;
-        }
-        else if (c == strings[cur_string][index]) {
-          index++;
-        }
-        else if (c == ' ' && strings[cur_string][index] == '\0') {
-          state = s_resp_text;
-        }
-        else {
-          ERR();
-        }
-
-
-        break;
-      case s_resp_cond_bye:
-        str = strings[STR_BYE];
-        if (c == ' ' && str[index] == '\0') {
-          state = NEXT_STATE_POP();
-          index = 0;
-        }
-        else if (c == str[index]) {
-          index++;
-        }
-        else {
-          ERR();
         }
         break;
+
+      case s_response_tagged_mid:
+        index = 0;
+        if (c != ' ') ERR();
+        state = s_resp_cond_state;
+        next_state = s_check_crlf;
+        break;
+
+      case s_resp_cond_state:
+        if (index == 0) {
+          str_start = p;
+          switch (c) {
+            case 'O': cur_string = STR_OK;  break;
+            case 'N': cur_string = STR_NO;  break;
+            case 'B': cur_string = STR_BAD; break;
+          }
+        }
+        else {
+          str = strings[cur_string];
+          if (c == ' ' && str[index] == '\0') {
+            state = s_resp_text_start;
+            printf("TYPE => ");
+            PRN(str_start, p);
+            break;
+          }
+          else if (str[index] != c) {
+            ERR();
+          }
+        }
+        index++;
+        break;
+
+
+      case s_resp_text_start:
+        index = 0;
+        // fall through
       case s_resp_text:
-        if (c == '[') {
-          state = s_resp_text_code;
+        if (c == '[') state = s_resp_text_code;
+        else state = s_text_start;
+        p--;
+        break;
+
+      case s_resp_text_code:
+        if (last_char == ']' && c == ' ') {
+          state = s_text_start;
+        }
+        break;
+
+      case s_text_start:
+        index = 0;
+        str_start = p;
+        state = s_text;
+
+        // fall through
+      case s_text:
+        if (!IS_TEXT_CHAR(c)) {
+          if (index == 0) ERR();
+          else {
+            printf("TEXT => ");
+            PRN(str_start, p);
+
+            index = 0;
+            p--;
+            state = next_state;
+            break;
+          }
+        }
+        index++;
+        break;
+
+      case s_check_crlf:
+        if (c == '\r') {
+          state = s_check_lf;
           break;
         }
-        else state = s_text;
-
-        // FALL THROUGH
-      case s_text:
-        if (index == 0) {
-          //TODO: MARK TEXT
+      case s_check_lf:
+        if (c == '\n') {
+          state = s_response_start;
         }
-        if (!IS_TEXT_CHAR(c)) {
-          if (index == 0) ERR(); // need 1 or more chars
-          // TODO: END TEXT EVENT
-          state = NEXT_STATE_POP();
-          index = 0;
-        }
-        break;
-      case s_resp_text_code:
-        if (index == 0) {
-          cur_string = STR_UNKNOWN;
-          switch(c) {
-            case 'A': cur_string = STR_ALERT; break;
-            case 'B': cur_string = STR_BADCHARSET; break;
-            case 'C':
-              state = s_capability_data;
-              break;
-            case 'P': cur_string = STR_PARSE; break; // OR PERMANENTFLAGS
-            case 'R': cur_string = STR_READ_ONLY; break; // OR READ_WRITE
-            case 'T': cur_string = STR_TRYCREATE; break;
-            case 'U': cur_string = STR_UIDNEXT; break; // OR UIDVALIDITY OR UNSEEN
-            case '\\': state = s_resp_text_code_flag_perm; break;
-          }
-        }
-        else if (index == 1) {
-          if (IS_ATOM_CHAR(last_char)) {
-            if (c == ' ') state = s_resp_text_code_atom;
-            if (c == ']') state = s_resp_text_code_done;
-
-            if (c == ' ' || c == ']') {
-              // TODO: Atom event?
-            }
-            index = 0;
-            break;
-          }
-          else if (cur_string == STR_PARSE && c == 'E') {
-            cur_string = STR_PERMANENTFLAGS;
-          }
-        }
-        else if (cur_string == STR_READ_ONLY && index == 5 && c == 'W') {
-          cur_string = STR_READ_WRITE;
-        }
-        else if (cur_string == STR_UIDNEXT) {
-          if (index == 3 && c == 'V') cur_string = STR_UIDVALIDITY;
-          else if (index == 2 && c == 'S') cur_string = STR_UNSEEN;
-        }
-
-        str = strings[cur_string];
-        if (c == ']' && str[index] == '\0') {
-          state = s_resp_text_code_done;
-          // TODO: EVENT
-          index = 0;
-        }
-        else if (c == ' ' && str[index] == '\0') {
-          switch(cur_string) {
-            case STR_BADCHARSET:
-              state = s_resp_text_code_badcharset;
-              break;
-            case STR_PERMANENTFLAGS:
-              state = s_resp_text_code_permanentflags;
-              break;
-            case STR_UIDNEXT:
-            case STR_UIDVALIDITY:
-            case STR_UNSEEN:
-              state = s_resp_text_code_u;
-              break;
-            default:
-              ERR();
-              break;
-          }
-          index = 0;
-        }
-        else if (c != str[index]) {
+        else {
           ERR();
         }
-        else {
-          index++;
-        }
-
-        break;
-      case s_resp_text_code_badcharset:
-        if (c == '(') {
-          state = s_resp_text_code_badcharset_str;
-          done = 0;
-        }
-        else ERR();
-        break;
-      case s_resp_text_code_badcharset_str:
-        if (!done) {
-          ASTRING(c);
-        }
-        else if (c == ' ') {
-          done = 0; // parse next string
-        }
-        else if (c == ')'){
-          state = s_resp_text_code_done;
-        }
-        else ERR();
-        break;
-      case s_resp_text_code_atom:
-        if (index == 0) {
-          // MARK start
-        }
-
-        if (IS_TEXT_CHAR(c) && c != ']') {
-        }
-        else if (index == 0) ERR();
-        else {
-          // DONE
-        }
-        break;
-
-      case s_resp_text_code_done:
-        if (c == ' ') state = s_text;
-        else ERR();
-        break;
-
-      case s_response_data_end:
-      case s_resp_mailbox_or_message_data:
-      case s_resp_text_code_u:
-      case s_resp_text_code_permanentflags:
-      case s_resp_text_code_flag_perm:
-      case s_capability_data:
-      case s_continue_req:
-      case s_mailbox_data:
-        ERR();
-        break;
-      case s_parse_error:
         break;
     }
 
@@ -567,6 +260,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
   }
 
   parser->state = state;
+  parser->next_state = next_state;
   parser->index = index;
   parser->cur_string = cur_string;
   parser->last_char = last_char;
