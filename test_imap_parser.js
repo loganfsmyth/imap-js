@@ -39,7 +39,7 @@ module.exports = testCase({
       badcharset_literal: function(test) {
         test.doesNotThrow(function() {
           try {
-            runner("a001 OK [BADCHARSET ({5}\r\nABCDE)] OH YEAH\r\n")();
+            runner("a001 OK [BADCHARSET ({5}\r\nABCDE \"BADSET\")] OH YEAH\r\n")();
           }
           catch (e) {
             console.log(e);

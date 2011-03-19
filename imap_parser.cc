@@ -44,6 +44,8 @@ enum parser_state {
   s_literal_lf,
   s_literal_chars,
   s_quoted_start,
+  s_quoted,
+  s_quoted_escaped,
 
   s_nz_number_start,
   s_nz_number,
@@ -544,6 +546,28 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         PRN("LITERAL", p, p+index);
         p += index-1;
         state = s_resp_text_code_badcharset_args_done;
+        break;
+
+
+      case s_quoted_start:
+        if (!IS_DQUOTE(c)) ERR();
+        state = s_quoted;
+        str_start = p+1; //TODO:  WRONG
+        break;
+      case s_quoted:
+        if (c == '\\') {
+          state = s_quoted_escaped;
+        }
+        else if (!(IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c))) {
+          if (!IS_DQUOTE(c)) ERR();
+          PRN("QUOTED", str_start, p);
+          state = s_resp_text_code_badcharset_args_done;
+        }
+        break;
+
+      case s_quoted_escaped:
+        if (!IS_QUOTED_SPECIAL(c)) ERR();
+        state = s_quoted;
         break;
 
       case s_check_crlf:
