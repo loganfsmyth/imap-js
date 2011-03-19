@@ -38,6 +38,11 @@ enum parser_state {
   s_astring_start,
   s_astring,
   s_literal_start,
+  s_literal_number_start,
+  s_literal_number,
+  s_literal_crlf,
+  s_literal_lf,
+  s_literal_chars,
   s_quoted_start,
 
   s_nz_number_start,
@@ -499,7 +504,47 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           break;
         }
         break;
-        
+
+
+      case s_literal_start:
+        if (c != '{') ERR();
+        state = s_literal_number_start;
+        break;
+      case s_literal_number_start:
+        if (!IS_DIGIT(c)) ERR();
+        state = s_literal_number;
+        index = c - '0';
+        break;
+      case s_literal_number:
+        if (!IS_DIGIT(c)) {
+          if (c != '}') ERR();
+          state = s_literal_crlf;
+          bytes_remaining = index;
+        }
+        else {
+          index *= 10;
+          index += c - '0';
+        }
+        break;
+      case s_literal_crlf:
+        if (c == '\r') {
+          state = s_literal_lf;
+          break;
+        }
+      case s_literal_lf:
+        if (c == '\n') {
+          state = s_literal_chars;
+        }
+        else {
+          ERR();
+        }
+        break;
+      case s_literal_chars:
+        index = (bytes_remaining < (pe-p))?bytes_remaining:(pe-p);
+        PRN("LITERAL", p, p+index);
+        p += index-1;
+        state = s_resp_text_code_badcharset_args_done;
+        break;
 
       case s_check_crlf:
         if (c == '\r') {
