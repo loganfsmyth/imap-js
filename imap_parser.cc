@@ -41,7 +41,12 @@ enum parser_state {
   s_quoted_start,
 
   s_nz_number,
-  s_flag_permanent,
+  s_permanentflags_args_start,
+  s_permanentflags_args_almost_start,
+  s_permanentflags_args_done,
+  s_flag_perm_start,
+  s_flag_perm_check,
+  s_flag_perm,
 
 };
 
@@ -312,7 +317,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
                 PRN("TEXTCODE", str_start, p);
                 break;
               case STR_PERMANENTFLAGS:
-                state = s_flag_permanent;
+                if (c != ' ') ERR();
+                state = s_permanentflags_args_start;
                 break;
               case STR_CAPABILITY:
                 state = s_capability_data_arg_start;
@@ -378,6 +384,58 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
         }
         break;
+
+      case s_permanentflags_args_start:
+        if (c != '(') ERR();
+        state = s_permanentflags_args_almost_start;
+        break;
+      case s_permanentflags_args_almost_start:
+        if (c != ')') {
+          state = s_flag_perm_start;
+          p--;
+          break;
+        }
+        // Fall Through
+      case s_permanentflags_args_done:
+        if (c == ' ') {
+          state = s_flag_perm_start;
+        }
+        else {
+          if (c != ')') ERR();
+          state = s_resp_text_code_almost_done;
+        }
+        break;
+
+      case s_flag_perm_start:
+        if (!IS_ATOM_CHAR(c) && c != '\\') ERR();
+        state = s_flag_perm_check;
+        str_start = p;
+        break;
+      case s_flag_perm_check:
+        if (c == '*') {
+          state = s_permanentflags_args_done;
+          PRN("PERM", str_start, p+1);
+        }
+        else if (IS_ATOM_CHAR(c)) {
+          state = s_flag_perm;
+        }
+        else if (last_char != '\\') {
+          // accounts for flags that are a single atom-char
+          state = s_permanentflags_args_done;
+          PRN("PERM", str_start, p);
+          p--;
+        }
+        else ERR();
+        break;
+      case s_flag_perm:
+        if (!IS_ATOM_CHAR(c)) {
+          state = s_permanentflags_args_done;
+          PRN("PERM", str_start, p);
+          p--;
+        }
+        break;
+        
+
 
       case s_resp_text_code_atom_test:
 

@@ -36,6 +36,29 @@ module.exports = testCase({
         });
         test.done();
       },
+      perm: function(test) {
+        test.doesNotThrow(function() {
+          try {
+            runner("a001 OK [PERMANENTFLAGS (\\Answered \\* FLAG)] OH YEAH\r\n")();
+          }
+          catch (e) {
+            console.log(e);
+          }
+        });
+        test.done();
+      },
+      perm2: function(test) {
+        test.doesNotThrow(function() {
+          try {
+            runner("a001 OK [PERMANENTFLAGS ()] OH YEAH\r\n")();
+          }
+          catch (e) {
+            console.log(e);
+          }
+        });
+        test.done();
+      },
+
       bad : function(test) {
         test.doesNotThrow(runner('a001 BAD [READ-ONLY] Failure\r\n'));
         setTimeout( function() {
