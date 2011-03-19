@@ -88,7 +88,7 @@ var ImapClient = exports.ImapClient = function(host, port, secure, cb) {
   parser.onContinuation = function(text) {
     var handler = self.continuationQueue.shift();
     var result = handler(text);
-    if (result)
+    if (result) {
       // return false means it is not done
       self.con.write(result);
       self.continuationQueue.unshift(handler);
@@ -110,11 +110,14 @@ var ImapClient = exports.ImapClient = function(host, port, secure, cb) {
     self.emit('connect');
   });
 
-  
-  var c = 0;
   self.con.on('data', function(d) {
     console.log('Totally parsing: ' + d.toString('utf8'));
-    self.parser.execute(d, 0, d.length);
+    try {
+      parser.execute(d, 0, d.length);
+    }
+    catch(e) {
+      console.log(e);
+    }
   });
 
 

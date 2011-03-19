@@ -21,8 +21,19 @@ module.exports = testCase({
 
   response_data: {
     resp_cond_state: {
+      cap: function(test) {
+        test.doesNotThrow(function() {
+          try{
+            runner("a001 OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE STARTTLS LOGINDISABLED] Dovecot ready.\r\n")();
+          }
+          catch(e) {
+            console.log(e);
+          }
+        });
+        test.done();
+      },
       bad : function(test) {
-        test.doesNotThrow(runner('a001 BAD Failure\r\n'));
+        test.doesNotThrow(runner('a001 BAD [READ-ONLY] Failure\r\n'));
         setTimeout( function() {
           test.done();
         }, 500);
@@ -32,7 +43,7 @@ module.exports = testCase({
         test.done();
       },
       no : function(test) {
-        test.doesNotThrow(runner('a001 NO Failure\r\n'));
+        test.doesNotThrow(runner('a001 NO [ALERT] Failure\r\n'));
         test.done();
       },
       bye : function(test) {

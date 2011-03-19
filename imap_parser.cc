@@ -11,6 +11,9 @@ enum parser_state {
   s_parse_error = 1,
   s_response_start,
   s_continue_req,
+  s_capability_data_start,
+  s_capability_data_arg,
+  s_capability_data_arg_start,
   s_response_data,
   s_response_tagged_start,
   s_tag_start,
@@ -21,16 +24,19 @@ enum parser_state {
   s_check_lf,
   s_resp_text,
   s_resp_text_start,
+  s_resp_text_code_start,
   s_resp_text_code,
+  s_resp_text_code_done,
+  s_resp_text_code_atom,
+  s_resp_text_code_atom_test,
+  s_resp_text_code_badcharset_args,
   s_text_start,
   s_text,
 
-};
+  s_nz_number,
+  s_flag_permanent,
 
-#define NEXT_STATE_PUSH(s) parser->next_states[parser->num_next_states++] = (unsigned char)s;
-#define NEXT_STATE_POP() (enum parser_state)parser->next_states[--parser->num_next_states];
-//#define STATE_CUR() (enum parser_state)parser->state[parser->num_states-1];
-//#define STATE_SET(s) parser->state[parser->num_states-1] = s;
+};
 
 #define EXPECT(character) if (c != character) ERR()
 #define GIVEN(cond, st) if (cond) state = st
@@ -53,6 +59,7 @@ enum string_ref {
   STR_READ_WRITE,
   STR_UIDVALIDITY,
   STR_UNSEEN,
+  STR_AUTH_EQ,
 
 };
 
@@ -74,6 +81,7 @@ static const char *strings[] = {
   "READ-WRITE",
   "UIDVALIDITY",
   "UNSEEN",
+  "AUTH=",
 
 };
 
@@ -104,10 +112,10 @@ static const char *strings[] = {
 
 //#define IS_QUOTED_CHAR(c, prev) ((IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c)) || (prev == '\\' && IS_QUOTED_SPECIAL(c)))
 
-#define PRN(start, end)   \
+#define PRN(str, start, end)   \
 do {    \
   char* to = strndup(start, (end-start)); \
-  printf("%s\n", to);   \
+  printf(str " => %s\n", to);   \
   free(to);     \
 } while(0)      
 
@@ -135,7 +143,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
   char c;
   const char *p, *pe, *str;
 
-  const char* str_start;
+  const char* str_start = data;
 
   size_t amount;
 
@@ -143,6 +151,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
     c = *p;
 
     switch(state) {
+
+      // Start of ( continue-req / response-data / response-tagged )
       case s_response_start:
         switch (c) {
           case '+':  state = s_continue_req;  ERR(); break;
@@ -151,7 +161,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         p--;
         break;
+
+      // Start of ( tag SP resp-code-state CRLF )
       case s_response_tagged_start:
+
+      // Start of ( 1*<STRING-CHAR except "+"> )
       case s_tag_start:
         index = 0;
         state = s_tag;
@@ -164,8 +178,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else {
           if (index == 0) ERR();
           else {
-            printf("TAG => ");
-            PRN(str_start, p);
+            PRN("TAG", str_start, p);
             state = s_response_tagged_mid;
             p--;
           }
@@ -179,6 +192,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         next_state = s_check_crlf;
         break;
 
+      // Start of ("OK" / "NO" / "BAD") SP resp-text
       case s_resp_cond_state:
         if (index == 0) {
           str_start = p;
@@ -192,8 +206,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           str = strings[cur_string];
           if (c == ' ' && str[index] == '\0') {
             state = s_resp_text_start;
-            printf("TYPE => ");
-            PRN(str_start, p);
+            PRN("TYPE", str_start, p);
             break;
           }
           else if (str[index] != c) {
@@ -203,34 +216,160 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         index++;
         break;
 
-
+      // Start of ["[" resp-text-code "]" SP] text
       case s_resp_text_start:
         index = 0;
         // fall through
       case s_resp_text:
-        if (c == '[') state = s_resp_text_code;
+        if (c == '[') state = s_resp_text_code_start;
         else state = s_text_start;
         p--;
         break;
 
+      /**
+       * Start of ("ALERT" / "BADCHARSET" [SP "(" astring *(SP astring) ")"] / capability-data / "PARSE" /
+       *           "PERMANENTFLAGS" SP "(" [flag-perm *(flag-perm)] ")" / "READ-ONLY" / "READ-WRITE" / "TRYCREATE" /
+       *           "UIDNEXT" SP nz-number / "UIDVALIDITY" SP nz-number /
+       *           "UNSEEN" SP nz-number / atom [SP 1*<any TEXT-CHAR except "]"]
+       */
+      case s_resp_text_code_start:
+        // starts at '['
+        index = 0;
+        state = s_resp_text_code;
+        break;
       case s_resp_text_code:
-        if (last_char == ']' && c == ' ') {
-          state = s_text_start;
+        switch (index) {
+          case 0:
+            str_start = p;
+
+            switch (c) {
+              case 'A': cur_string = STR_ALERT;   break;
+              case 'P': cur_string = STR_PARSE;   break;    // PARSE or PERMANENTFLAGS
+              case 'R': cur_string = STR_READ_ONLY; break;  // READ-ONLY or READ-WRITE
+              case 'T': cur_string = STR_TRYCREATE; break;
+              case 'U': cur_string = STR_UIDNEXT; break;    // UIDNEXT or UIDVALIDITY or UNSEEN
+              case 'B': cur_string = STR_BADCHARSET; break;
+              case 'C': cur_string = STR_CAPABILITY; break;
+              default: cur_string = STR_UNKNOWN; break; // for atom strings
+            }
+            break;
+          case 1:
+            switch (c) {
+              case 'E':
+                if (cur_string == STR_PARSE) {
+                  cur_string = STR_PERMANENTFLAGS;
+                }
+                break;
+              case 'N':
+                if (cur_string == STR_UIDNEXT) {
+                  cur_string = STR_UNSEEN;
+                }
+                break;
+            }
+            break;
+          case 3:
+            if (c == 'V' && cur_string == STR_UIDNEXT) {
+              cur_string = STR_UIDVALIDITY;
+            }
+            break;
+          case 5:
+            if (c == 'W' && cur_string == STR_READ_ONLY) {
+              cur_string = STR_READ_WRITE;
+            }
+        }
+
+        if (cur_string != STR_UNKNOWN) {
+          str = strings[cur_string];
+
+          if (str[index] == '\0' && (c == ' ' || c == ']')) {
+            switch (cur_string) {
+              case STR_BADCHARSET:
+                if (c == ' ') {
+                  state = s_resp_text_code_badcharset_args;
+                  break;
+                }
+              case STR_ALERT:
+              case STR_READ_ONLY:
+              case STR_READ_WRITE:
+              case STR_PARSE:
+              case STR_TRYCREATE:
+                if (c == ' ') ERR();
+                state = s_text_start;
+                PRN("TEXTCODE", str_start, p);
+                break;
+              case STR_UIDNEXT:
+              case STR_UIDVALIDITY:
+              case STR_UNSEEN:
+                if (c == ']') ERR();
+                state = s_nz_number;
+                PRN("TEXTCODE", str_start, p);
+                break;
+              case STR_PERMANENTFLAGS:
+                state = s_flag_permanent;
+                break;
+              case STR_CAPABILITY:
+                state = s_capability_data_arg_start;
+                break;
+              default:
+                state = s_resp_text_code_atom_test;
+                break;
+            }
+          }
+          else if (str[index] != c) {
+            state = s_resp_text_code_atom_test;
+          }
+
+          index++;
         }
         break;
+
+      case s_resp_text_code_done:
+        if (c != ' ') ERR();
+        state = s_text_start;
+        break;
+
+      
+      case s_capability_data_start:
+        if (c != ' ') {
+          state = s_resp_text_code_done; // TODO: this needs to be different for untagged
+        }
+        else {
+          state = s_capability_data_arg_start;
+        }
+        break;
+      case s_capability_data_arg_start:
+        str_start = p;
+        index = 0;
+        if (!IS_ATOM_CHAR(c)) {
+          ERR();
+        }
+        state = s_capability_data_arg;
+        break;
+      case s_capability_data_arg:
+        if (!IS_ATOM_CHAR(c)) {
+          state = s_capability_data_start;
+          PRN("CAP", str_start, p);
+          p--;
+        }
+        break;
+
+      case s_resp_text_code_atom_test:
+
+      case s_resp_text_code_atom:
+        break;
+
+
 
       case s_text_start:
         index = 0;
         str_start = p;
         state = s_text;
-
         // fall through
       case s_text:
         if (!IS_TEXT_CHAR(c)) {
           if (index == 0) ERR();
           else {
-            printf("TEXT => ");
-            PRN(str_start, p);
+            PRN("TEXT", str_start, p);
 
             index = 0;
             p--;
