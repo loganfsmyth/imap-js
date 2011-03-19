@@ -65,7 +65,7 @@ function getCommandTag (count) {
 
 
 
-var ImapClient = exports.ImapClient = function(host, port) {
+var ImapClient = exports.ImapClient = function(host, port, secure, cb) {
   EventEmitter.call(this);
 
   var self = this;
@@ -75,15 +75,22 @@ var ImapClient = exports.ImapClient = function(host, port) {
   var responseCallbacks = {};
   var continuationQueue = [];
 
-  self.con = net.createConnection(port, host);
-  self.con.setKeepAlive();
+  if (secure == 'ssl') {
+    self.con = tls.connect(port, host);
+  }
+  else {
+    self.con = net.createConnection(port, host);
+    self.con.setKeepAlive(true);
+  }
 
   var parser = new ImapParser();
 
   parser.onContinuation = function(text) {
     var handler = self.continuationQueue.shift();
-    if (!handler(text)) {
+    var result = handler(text);
+    if (result)
       // return false means it is not done
+      self.con.write(result);
       self.continuationQueue.unshift(handler);
     }
   };
@@ -103,9 +110,11 @@ var ImapClient = exports.ImapClient = function(host, port) {
     self.emit('connect');
   });
 
+  
+  var c = 0;
   self.con.on('data', function(d) {
     console.log('Totally parsing: ' + d.toString('utf8'));
-//    self.parser.execute(d);
+    self.parser.execute(d);
   });
 
 
@@ -117,13 +126,20 @@ var ImapClient = exports.ImapClient = function(host, port) {
     }
 
     responseCallbacks[tag] = command.response;
-//    var com = tag + ' ' + command.command + "\r\n";
-//    console.log(com);
+    var com = tag + ' ' + command.command + "\r\n";
+    console.log(com);
     self.con.write(tag + ' ' + command.command + "\r\n");
 
   }
 
-
+  if (secure == 'tls') {
+    this.starttls(function(type, text, response) {
+      cb(type);
+    });
+  }
+  else {
+    process.nextTick(cb);
+  }
 
 }
 util.inherits(ImapClient, EventEmitter);
@@ -136,7 +152,7 @@ ImapClient.prototype.capability = function(cb) {
   this.enqueueCommand({
     command: 'CAPABILITY',
     result: function(type, text, response) {
-      
+      cb(type, text, response);
     },
   });
 }
@@ -187,18 +203,17 @@ ImapClient.prototype.authenticate = function(auth_mechanism, cb) {
   this.enqueueCommand({
     command: 'AUTHENTICATE',
     continuation: function(text) {
-
-
+      if (auth_mechanism.coninuation) auth_mechanism.continuation(text);
     },
     response: function(type, text, response) {
-
+      if (auth_mechanism.response) auth_mechanism.response(type, text, response);
     },
   });
 }
 
 ImapClient.prototype.login = function(user, pass, cb) {
   this.enqueueCommand({
-    command: 'LOGIN',
+    command: 'LOGIN ' + user + ' ' + pass,
     response: cb
   });
 }
