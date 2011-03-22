@@ -1,4 +1,4 @@
 
 
-build: imap_parser.cc imap_parser.h node_imap_parser.cc
-	node-waf configure && node-waf build
+build: lib/imap_parser.cc lib/imap_parser.h lib/node_imap_parser.cc
+	cd lib && node-waf configure && node-waf build
