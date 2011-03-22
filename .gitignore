@@ -1,3 +1,2 @@
-*.swp
-*.swo
-
+lib/build
+.lock-wscript
