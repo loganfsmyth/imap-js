@@ -120,5 +120,5 @@ extern "C" {
     target->Set(String::NewSymbol("ImapParser"), ImapParserNew->GetFunction());
   }
 
-  NODE_MODULE(imap_parser, init); // Must match file name
+  NODE_MODULE(imap_parser_native, init); // Must match file name
 }
