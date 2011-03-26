@@ -19,6 +19,7 @@ struct imap_parser {
 
   unsigned int last_char;
   unsigned int index;
+  unsigned int bytes_remaining;
 
   void* data;
 };

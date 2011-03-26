@@ -1,6 +1,6 @@
 
 var testCase = require('nodeunit').testCase;
-var ImapParser = require('../lib/imap_parser_native').ImapParser;
+var ImapParser = require('../lib/imap-parser').ImapParser;
 var p = new ImapParser();
 
 
@@ -8,7 +8,7 @@ function runner(str) {
   var b = new Buffer(str);
 
   return function() {
-    return p.execute(b, 0, b.length);
+    return p.execute( b );
   }
 }
 

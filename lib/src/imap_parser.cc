@@ -139,6 +139,22 @@ do {    \
   free(to);     \
 } while(0)      
 
+#define CB_ONDATA(end)                                      \
+if (str_start && settings->on_data) {                       \
+  settings->on_data(parser, str_start, (end - str_start));  \
+}
+
+#define CB_ONNUMBER(num)                          \
+if (start && settings->on_number) {               \
+  settings->on_number(parser, num);               \
+}
+
+#define CB_ONDONE(type)                           \
+if (start && settings->on_done) {                 \
+  settings->on_done(parser, type);                \
+}
+
+
 
 void imap_parser_init(imap_parser* parser) {
   parser->state = s_response_start;
@@ -157,15 +173,12 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
   enum string_ref cur_string = (enum string_ref)parser->cur_string;
   char last_char = parser->last_char;
 
-  unsigned int bytes_remaining = -1;
-  char done;
+  unsigned int bytes_remaining = parser->bytes_remaining;
 
   char c;
   const char *p, *pe, *str;
 
-  const char* str_start = data;
-
-  size_t amount;
+  const char* str_start = NULL;
 
   for (p = data, pe = data+len; p != pe; p++ ) {
     c = *p;
@@ -199,6 +212,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           if (index == 0) ERR();
           else {
             PRN("TAG", str_start, p);
+            CB_ONDATA(p);
             state = s_response_tagged_mid;
             p--;
           }
@@ -227,6 +241,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           if (c == ' ' && str[index] == '\0') {
             state = s_resp_text_start;
             PRN("TYPE", str_start, p);
+            CB_ONDATA(p);
             break;
           }
           else if (str[index] != c) {
@@ -316,6 +331,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
                 if (c == ' ') ERR();
                 state = s_text_start;
                 PRN("TEXTCODE", str_start, p);
+                CB_ONDATA(p);
                 break;
               case STR_UIDNEXT:
               case STR_UIDVALIDITY:
@@ -323,6 +339,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
                 if (c == ']') ERR();
                 state = s_nz_number_start;
                 PRN("TEXTCODE", str_start, p);
+                CB_ONDATA(p);
                 break;
               case STR_PERMANENTFLAGS:
                 if (c != ' ') ERR();
@@ -389,6 +406,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (!IS_ATOM_CHAR(c)) {
           state = s_capability_data_start;
           PRN("CAP", str_start, p);
+          CB_ONDATA(p);
           p--;
         }
         break;
@@ -423,6 +441,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (c == '*') {
           state = s_permanentflags_args_done;
           PRN("PERM", str_start, p+1);
+          CB_ONDATA(p+1);
         }
         else if (IS_ATOM_CHAR(c)) {
           state = s_flag_perm;
@@ -431,6 +450,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           // accounts for flags that are a single atom-char
           state = s_permanentflags_args_done;
           PRN("PERM", str_start, p);
+          CB_ONDATA(p);
           p--;
         }
         else ERR();
@@ -439,6 +459,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (!IS_ATOM_CHAR(c)) {
           state = s_permanentflags_args_done;
           PRN("PERM", str_start, p);
+          CB_ONDATA(p);
           p--;
         }
         break;
@@ -462,6 +483,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           if (index == 0) ERR();
           else {
             PRN("TEXT", str_start, p);
+            CB_ONDATA(p);
 
             index = 0;
             p--;
@@ -488,6 +510,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       case s_astring:
         if (!IS_ASTRING_CHAR(c)) {
           PRN("ASTRING", str_start, p);
+          CB_ONDATA(p);
           state = s_resp_text_code_badcharset_args_done;
           p--;
         }
@@ -502,6 +525,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (!IS_DIGIT(c)) {
           state = s_resp_text_code_almost_done;
           PRN("NZNUM", str_start, p);
+          CB_ONDATA(p);
           p--;
           break;
         }
@@ -544,6 +568,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       case s_literal_chars:
         index = (bytes_remaining < (pe-p))?bytes_remaining:(pe-p);
         PRN("LITERAL", p, p+index);
+        str_start = p;
+        CB_ONDATA(p+index);
         p += index-1;
         state = s_resp_text_code_badcharset_args_done;
         break;
@@ -561,6 +587,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else if (!(IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c))) {
           if (!IS_DQUOTE(c)) ERR();
           PRN("QUOTED", str_start, p);
+          CB_ONDATA(p);
           state = s_resp_text_code_badcharset_args_done;
         }
         break;
@@ -593,6 +620,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
   parser->index = index;
   parser->cur_string = cur_string;
   parser->last_char = last_char;
+  parser->bytes_remaining = bytes_remaining;
 
   return len;
 

@@ -22,7 +22,6 @@ private:
 
   Local<Value>* current_buffer;
   char* current_buffer_data;
-  size_t current_buffer_len;
 
   void Init() {
     imap_parser_init(&parser);
@@ -76,9 +75,9 @@ public:
       return ThrowException(Exception::Error(String::New("Length from offset larger than buffer")));
     }
 
+    // Referencing local variable, dangerous but resetting to NULL in a few lines
     self->current_buffer = &buffer_arg;
     self->current_buffer_data = buffer_data;
-    self->current_buffer_len = buffer_len;
 
     self->got_exception_ = false;
 
@@ -86,7 +85,6 @@ public:
 
     self->current_buffer = NULL;
     self->current_buffer_data = NULL;
-    self->current_buffer_len = 0;
 
     if (self->got_exception_) return Local<Value>();
 
@@ -106,6 +104,11 @@ public:
     }
   }
 
+
+  /**
+   * Callbacks from parser
+   * They just trigger their related JS functions
+   */
   static int on_data(imap_parser* parser, const char* data, size_t len) {
     ImapParser *self = static_cast<ImapParser*>(parser->data);
     Local<Value> cb_value = self->handle_->Get(String::NewSymbol("onData"));
