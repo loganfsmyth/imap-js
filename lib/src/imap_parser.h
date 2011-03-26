@@ -24,10 +24,14 @@ struct imap_parser {
 };
 
 typedef int (*imap_data_cb) (imap_parser*, const char*, size_t);
-typedef int (*imap_cb) (imap_parser*);
+typedef int (*imap_cb) (imap_parser*, unsigned int);
 
 struct imap_parser_settings {
+  imap_data_cb on_data;
 
+  imap_cb on_literal; // to Initialize a buffer for specified size
+  imap_cb on_number;
+  imap_cb on_done;
 };
 
 
