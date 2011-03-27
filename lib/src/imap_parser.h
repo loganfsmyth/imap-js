@@ -9,6 +9,24 @@ extern "C" {
 
 #include <sys/types.h>
 
+enum data_types {
+  IMAP_NONE = 0,
+  IMAP_TAG,
+  IMAP_STATE,
+  IMAP_CAPABILITY,
+  IMAP_TEXT,
+  IMAP_QUOTED,
+  IMAP_LITERAL,
+  IMAP_FLAG,
+  IMAP_TEXTCODE,
+  IMAP_ASTRING,
+  IMAP_NUMBER,
+  IMAP_RESPONSE,
+  IMAP_BASE64,
+};
+
+
+
 struct imap_parser {
   unsigned char state;
   unsigned char next_state;
@@ -24,7 +42,7 @@ struct imap_parser {
   void* data;
 };
 
-typedef int (*imap_data_cb) (imap_parser*, const char*, size_t);
+typedef int (*imap_data_cb) (imap_parser*, const char*, size_t, unsigned int);
 typedef int (*imap_cb) (imap_parser*, unsigned int);
 
 struct imap_parser_settings {

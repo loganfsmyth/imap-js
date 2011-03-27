@@ -109,34 +109,18 @@ public:
    * Callbacks from parser
    * They just trigger their related JS functions
    */
-  static int on_data(imap_parser* parser, const char* data, size_t len) {
+  static int on_data(imap_parser* parser, const char* data, size_t len, unsigned int type) {
     ImapParser *self = static_cast<ImapParser*>(parser->data);
     Local<Value> cb_value = self->handle_->Get(String::NewSymbol("onData"));
     if (!cb_value->IsFunction()) return 0;
     Local<Function> cb = Local<Function>::Cast(cb_value);
-    Local<Value> argv[3] = {
+    Local<Value> argv[4] = {
       *self->current_buffer,
       Integer::New(data - self->current_buffer_data),
       Integer::New(len),
+      Integer::New(type),
     };
-    Local<Value> ret = cb->Call(self->handle_, 3, argv);
-    if (ret.IsEmpty()) {
-      self->got_exception_ = true;
-      return -1;
-    }
-    else {
-      return 0;
-    }
-  }
-  static int on_number(imap_parser* parser, unsigned int number) {
-    ImapParser *self = static_cast<ImapParser*>(parser->data);
-    Local<Value> cb_value = self->handle_->Get(String::NewSymbol("onNumber"));
-    if (!cb_value->IsFunction()) return 0;
-    Local<Function> cb = Local<Function>::Cast(cb_value);
-    Local<Value> argv[1] = {
-      Integer::New(number),
-    };
-    Local<Value> ret = cb->Call(self->handle_, 1, argv);
+    Local<Value> ret = cb->Call(self->handle_, 4, argv);
     if (ret.IsEmpty()) {
       self->got_exception_ = true;
       return -1;
@@ -184,6 +168,22 @@ extern "C" {
     NODE_SET_PROTOTYPE_METHOD(ImapParserNew, "reinitialize", ImapParser::Reinitialize);
     NODE_SET_PROTOTYPE_METHOD(ImapParserNew, "execute", ImapParser::Execute);
     target->Set(String::NewSymbol("ImapParser"), ImapParserNew->GetFunction());
+
+
+    NODE_DEFINE_CONSTANT(target, IMAP_NONE);
+    NODE_DEFINE_CONSTANT(target, IMAP_TAG);
+    NODE_DEFINE_CONSTANT(target, IMAP_STATE);
+    NODE_DEFINE_CONSTANT(target, IMAP_CAPABILITY);
+    NODE_DEFINE_CONSTANT(target, IMAP_TEXT);
+    NODE_DEFINE_CONSTANT(target, IMAP_QUOTED);
+    NODE_DEFINE_CONSTANT(target, IMAP_LITERAL);
+    NODE_DEFINE_CONSTANT(target, IMAP_FLAG);
+    NODE_DEFINE_CONSTANT(target, IMAP_TEXTCODE);
+    NODE_DEFINE_CONSTANT(target, IMAP_ASTRING);
+    NODE_DEFINE_CONSTANT(target, IMAP_NUMBER);
+    NODE_DEFINE_CONSTANT(target, IMAP_RESPONSE);
+    NODE_DEFINE_CONSTANT(target, IMAP_BASE64);
+
   }
 
   NODE_MODULE(imap_parser_native, init); // Must match file name
