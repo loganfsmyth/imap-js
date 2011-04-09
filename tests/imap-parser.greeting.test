@@ -1,0 +1,50 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapParser = require('../lib/imap-parser').ImapParser;
+var p = new ImapParser(ImapParser.GREETING);
+
+function runner(str) {
+  var b = new Buffer(str);
+
+  return function() {
+    p.execute( b );
+    if (!p.isDone()) {
+        throw new Error("Command Incomplete");
+    }
+  }
+}
+
+module.exports = testCase({
+  setUp: function(cb) {
+    p.reinitialize(ImapParser.GREETING);
+    cb();
+  },
+  type_bye: function(test) {
+    test.doesNotThrow(runner("* BYE omg\r\n"));
+    test.done();
+  },
+  type_ok: function(test) {
+    test.doesNotThrow(runner("* OK omg\r\n"));
+    test.done();
+  },
+  type_preauth: function(test) {
+    test.doesNotThrow(runner("* PREAUTH omg\r\n"));
+    test.done();
+  },
+  type_random: function(test) {
+    test.throws(runner("* lkdsfgh omg\r\n"));
+    test.done();
+  },
+  type_missing: function(test) {
+    test.throws(runner("* omg\r\n"));
+    test.done();
+  },
+  continuation: function(test) {
+    test.throws(runner("+ BYE omg\r\n"));
+    test.done();
+  },
+  tagged: function(test) {
+    test.throws(runner("a001 BYE omg\r\n"));
+    test.done();
+  },
+});

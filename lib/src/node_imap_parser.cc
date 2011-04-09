@@ -23,14 +23,14 @@ private:
   Local<Value>* current_buffer;
   char* current_buffer_data;
 
-  void Init() {
-    imap_parser_init(&parser);
+  void Init(enum parser_types type) {
+    imap_parser_init(&parser, type);
     parser.data = this;
   }
 
 public:
-  ImapParser() {
-    Init();
+  ImapParser(enum parser_types type) {
+    Init(type);
   }
 
   ~ImapParser() {
@@ -38,7 +38,15 @@ public:
 
   static Handle<Value> New(const Arguments& args) {
     HandleScope scope;
-    ImapParser *self = new ImapParser();
+
+    if (args.Length() != 1) {
+      return ThrowException(Exception::TypeError(String::New("Missing type argument")));
+    }
+    if (!args[0]->IsNumber()) {
+      return ThrowException(Exception::TypeError(String::New("Type argument must be a number")));
+    }
+
+    ImapParser *self = new ImapParser((enum parser_types)args[0]->Int32Value());
     self->Wrap(args.This());
     return args.This();
   }
@@ -46,8 +54,11 @@ public:
   static Handle<Value> Reinitialize(const Arguments& args) {
     HandleScope scope;
     ImapParser *self = ObjectWrap::Unwrap<ImapParser>(args.This());
+    if (args.Length() != 1 || !args[0]->IsNumber()) {
+      return ThrowException(Exception::TypeError(String::New("Parser type argument missing")));
+    }
 
-    self->Init();
+    self->Init((enum parser_types)args[0]->Int32Value());
 
     return Undefined();
   }
@@ -95,7 +106,7 @@ public:
       e->ToObject()->Set(String::NewSymbol("attemptedBytes"), Integer::New(length));
       e->ToObject()->Set(String::NewSymbol("bytesParsed"), parsed_amount_val);
       e->ToObject()->Set(String::NewSymbol("parsedTo"), String::New(buffer_data, parsed_amount));
-      e->ToObject()->Set(String::NewSymbol("failureState"), Integer::New(self->parser.state));
+      e->ToObject()->Set(String::NewSymbol("failureState"), Integer::New(self->parser.state[self->parser.current_state]));
 
       return ThrowException(e);
     }
@@ -158,7 +169,6 @@ extern "C" {
 
     settings.on_data    = ImapParser::on_data;
     settings.on_done    = ImapParser::on_done;
-    settings.on_number  = ImapParser::on_number;
 
 
     Local<FunctionTemplate> t = FunctionTemplate::New(ImapParser::New);
@@ -183,6 +193,10 @@ extern "C" {
     NODE_DEFINE_CONSTANT(target, IMAP_NUMBER);
     NODE_DEFINE_CONSTANT(target, IMAP_RESPONSE);
     NODE_DEFINE_CONSTANT(target, IMAP_BASE64);
+
+    NODE_DEFINE_CONSTANT(target, PARSER_GREETING);
+    NODE_DEFINE_CONSTANT(target, PARSER_RESPONSE);
+    NODE_DEFINE_CONSTANT(target, PARSER_COMMAND);
 
   }
 

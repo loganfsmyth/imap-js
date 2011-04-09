@@ -1,0 +1,62 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapParser = require('../lib/imap-parser').ImapParser;
+var p = new ImapParser(ImapParser.GREETING);
+
+function runner(str) {
+  var b = new Buffer(str);
+
+  return function() {
+    p.execute( b );
+    if (!p.isDone()) {
+        throw new Error("Command Incomplete");
+    }
+  }
+}
+
+module.exports = testCase({
+  setUp: function(cb) {
+    p.reinitialize(ImapParser.GREETING);
+    console.log('----------------------');
+    cb();
+  },
+  cap: function(test) {
+    test.doesNotThrow(runner("* OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE STARTTLS LOGINDISABLED] Dovecot ready.\r\n"));
+    test.done();
+  },
+  badcharset: function(test) {
+    test.doesNotThrow(runner("* OK [BADCHARSET (OMG WHAT HAHAH)] OH YEAH\r\n"));
+    test.done();
+  },
+  badcharset_literal: function(test) {
+    test.doesNotThrow(runner("* OK [BADCHARSET ({5}\r\nABCDE)] OH YEAH\r\n"));
+    test.done();
+  },
+  badcharset_literal: function(test) {
+    test.doesNotThrow(runner("* OK [BADCHARSET (\"BADSET\")] OH YEAH\r\n"));
+    test.done();
+  },
+
+
+
+  perm: function(test) {
+    test.doesNotThrow(runner("* OK [PERMANENTFLAGS (\\Answered \\* FLAG)] OH YEAH\r\n"));
+    test.done();
+  },
+  perm2: function(test) {
+    test.doesNotThrow(runner("* OK [PERMANENTFLAGS ()] OH YEAH\r\n"));
+    test.done();
+  },
+  unseen: function(test) {
+    test.doesNotThrow(runner("* OK [UNSEEN 10] OH YEAH\r\n"));
+    test.done();
+  },
+  readonly : function(test) {
+    test.doesNotThrow(runner('* OK [READ-ONLY] Failure\r\n'));
+    test.done();
+  },
+  alert : function(test) {
+    test.doesNotThrow(runner('* OK [ALERT] Failure\r\n'));
+    test.done();
+  },
+});
