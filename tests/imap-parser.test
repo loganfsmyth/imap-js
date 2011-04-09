@@ -1,21 +1,21 @@
-
 var testCase = require('nodeunit').testCase;
 var ImapParser = require('../lib/imap-parser').ImapParser;
-var p = new ImapParser();
-
+var p = new ImapParser(ImapParser.RESPONSE);
 
 function runner(str) {
   var b = new Buffer(str);
 
   return function() {
-    return p.execute( b );
+    p.execute( b );
+    if (!p.isDone()) {
+        throw new Error("Command Incomplete");
+    }
   }
 }
 
-
 module.exports = testCase({
   setUp: function(callback) {
-    p.reinitialize();
+    p.reinitialize(ImapParser.RESPONSE);
     callback();
   },
 
@@ -26,69 +26,32 @@ module.exports = testCase({
         test.done();
       },
       badcharset: function(test) {
-        test.doesNotThrow(function() {
-          try {
-            runner("a001 OK [BADCHARSET (OMG WHAT HAHAH)] OH YEAH\r\n")();
-          }
-          catch (e) {
-            console.log(e);
-          }
-        });
+        test.doesNotThrow(runner("a001 OK [BADCHARSET (OMG WHAT HAHAH)] OH YEAH\r\n"));
         test.done();
       },
       badcharset_literal: function(test) {
-        test.doesNotThrow(function() {
-          try {
-            runner("a001 OK [BADCHARSET ({5}\r\nABCDE \"BADSET\")] OH YEAH\r\n")();
-          }
-          catch (e) {
-            console.log(e);
-          }
-        });
+        test.doesNotThrow(runner("a001 OK [BADCHARSET ({5}\r\nABCDE \"BADSET\")] OH YEAH\r\n"));
         test.done();
       },
  
 
       perm: function(test) {
-        test.doesNotThrow(function() {
-          try {
-            runner("a001 OK [PERMANENTFLAGS (\\Answered \\* FLAG)] OH YEAH\r\n")();
-          }
-          catch (e) {
-            console.log(e);
-          }
-        });
+        test.doesNotThrow(runner("a001 OK [PERMANENTFLAGS (\\Answered \\* FLAG)] OH YEAH\r\n"));
         test.done();
       },
       perm2: function(test) {
-        test.doesNotThrow(function() {
-          try {
-            runner("a001 OK [PERMANENTFLAGS ()] OH YEAH\r\n")();
-          }
-          catch (e) {
-            console.log(e);
-          }
-        });
+        test.doesNotThrow(runner("a001 OK [PERMANENTFLAGS ()] OH YEAH\r\n"));
         test.done();
       },
       unseen: function(test) {
-        test.doesNotThrow(function() {
-          try {
-            runner("a001 OK [UNSEEN 10] OH YEAH\r\n")();
-          }
-          catch (e) {
-            console.log(e);
-          }
-        });
+        test.doesNotThrow(runner("a001 OK [UNSEEN 10] OH YEAH\r\n"));
         test.done();
       },
 
 
       bad : function(test) {
         test.doesNotThrow(runner('a001 BAD [READ-ONLY] Failure\r\n'));
-        setTimeout( function() {
-          test.done();
-        }, 500);
+        test.done();
       },
       ok : function(test) {
         test.doesNotThrow(runner('a001 OK Failure\r\n'));
@@ -113,13 +76,11 @@ module.exports = testCase({
     },
     resp_cond_bye: {
       correct: function(test) {
-        test.doesNotThrow(function() {
-          runner('* BYE misc test\r\n')();
-        });
+        test.doesNotThrow(runner('a001 BAD misc test\r\n'));
         test.done();
       },
       wrong: function(test) {
-        test.throws(runner('* BYE\r\n'));
+        test.throws(runner('a001 BYE\r\n'));
         test.done();
       },
     }
