@@ -16,7 +16,14 @@ enum parser_state {
 
 
   s_response_start,
+
   s_continue_req,
+  s_continue_sp,
+  s_continue_resp_or_base64,
+  s_text_or_base64_start,
+  s_text_or_base64,
+
+
   s_capability_data_start,
   s_capability_data_arg,
   s_capability_data_arg_start,
@@ -159,7 +166,7 @@ if (settings->on_done) {                          \
   settings->on_done(parser, type);                \
 }
 
-#define SIGST(state) printf("State: " #state "\n")
+#define SIGST(state) printf("State: %c - %d: " #state "\n", c, index)
 
 #define STATE_CASE(st) case st: SIGST(st)
 
@@ -188,8 +195,6 @@ void imap_parser_init(imap_parser* parser, enum parser_types type) {
 
 size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, const char* data, size_t len) {
   
-  SIGST(STARTEXEC);
-
   unsigned int index = parser->index;
   enum string_ref cur_string = (enum string_ref)parser->cur_string;
   char last_char = parser->last_char;
@@ -252,13 +257,55 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
       // Start of ( continue-req / response-data / response-tagged )
       STATE_CASE(s_response_start);
+        SET_STATE(s_final_crlf);
         switch (c) {
-          case '+':  SET_STATE(s_continue_req);  ERR(); break;
-          case '*':  SET_STATE(s_response_data);  ERR(); break;
-          default :  SET_STATE(s_response_tagged_start);  break;
+          case '+':  PUSH_STATE(s_continue_req); break;
+          case '*':  PUSH_STATE(s_response_data);  ERR(); break;
+          default :  PUSH_STATE(s_response_tagged_start);  break;
         }
         p--;
         break;
+
+      STATE_CASE(s_continue_req);
+        if (c != '+') ERR();
+        SET_STATE(s_continue_sp);
+        break;
+      STATE_CASE(s_continue_sp);
+        if (c != ' ') ERR();
+        SET_STATE(s_continue_resp_or_base64);
+        break;
+      STATE_CASE(s_continue_resp_or_base64);
+        if (c == '[') {
+          SET_STATE(s_resp_text);
+          p--;
+          break;
+        }
+
+     STATE_CASE(s_text_or_base64_start);
+        str_start = p;
+        SET_STATE(s_text_or_base64);
+        index = 0;
+      STATE_CASE(s_text_or_base64);
+        if (!IS_TEXT_CHAR(c)) {
+          if (index == 0) ERR();
+
+          PRN("TEXTORBASE64", str_start, p);
+          if (index%4 == 0) {
+            CB_ONDATA(p, IMAP_TEXT_OR_BASE64);
+          }
+          else {
+            CB_ONDATA(p, IMAP_TEXT);
+          }
+          p--;
+          POP_STATE();
+          break;
+        }
+        if (!IS_ALPHA(c) && !IS_DIGIT(c) && c != '+' && c != '/' && c != '=') {
+          SET_STATE(s_text);
+        }
+        index++;
+        break;
+
 
 
 
@@ -289,8 +336,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_response_tagged_mid);
         index = 0;
         if (c != ' ') ERR();
-        SET_STATE(s_final_crlf);
-        PUSH_STATE(s_resp_cond_state);
+        SET_STATE(s_resp_cond_state);
 
         break;
 
@@ -302,6 +348,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
             case 'O': cur_string = STR_OK;  break;
             case 'N': cur_string = STR_NO;  break;
             case 'B': cur_string = STR_BAD; break;
+            default: ERR();
           }
         }
         else {
@@ -407,7 +454,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
               case STR_READ_WRITE:
               case STR_PARSE:
               case STR_TRYCREATE:
-                if (c == ' ') ERR();
+                if (c == ' ') ERR(); // TODO: These have a space at the start
                 SET_STATE(s_text_start);
 //                PRN("TEXTCODE", str_start, p);
                 CB_ONDATA(p, IMAP_TEXTCODE);

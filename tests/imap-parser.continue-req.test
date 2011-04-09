@@ -1,0 +1,61 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapParser = require('../lib/imap-parser').ImapParser;
+var p = new ImapParser(ImapParser.RESPONSE);
+
+function runner(str) {
+  var b = new Buffer(str);
+
+  return function() {
+    p.execute( b );
+    if (!p.isDone()) {
+        throw new Error("Command Incomplete");
+    }
+  }
+}
+
+module.exports = testCase({
+  setUp: function(cb) {
+    p.reinitialize(ImapParser.RESPONSE);
+    console.log('----------------------');
+    cb();
+  },
+  resp_text: function(test) {
+    test.doesNotThrow(runner("+ [ALERT] Dovecot ready.\r\n"));
+    test.done();
+  },
+  random_b64_test: function(test) {
+    test.doesNotThrow(runner("+ TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlzIHNpbmd1bGFyIHBhc3Npb24gZnJvbSBvdGhlciBhbmltYWxzLCB3aGljaCBpcyBhIGx1c3Qgb2YgdGhlIG1pbmQsIHRoYXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodCBpbiB0aGUgY29udGludWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25vd2xlZGdlLCBleGNlZWRzIHRoZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4=\r\n"));
+    test.done();
+  },
+  base64_2eq: function(test) {
+    test.doesNotThrow(runner("+ aef312==\r\n"));
+    test.done();
+  },
+  base64_1eq: function(test) {
+    test.doesNotThrow(runner("+ aef312C=\r\n"));
+    test.done();
+  },
+  base64_noeq: function(test) {
+    test.doesNotThrow(runner("+ aef312CD\r\n"));
+    test.done();
+  },
+  base64_plus: function(test) {
+    test.doesNotThrow(runner("+ aef31+CD\r\n"));
+    test.done();
+  },
+  base64_slash: function(test) {
+    test.doesNotThrow(runner("+ ae/31+CD\r\n"));
+    test.done();
+  },
+  text: function(test) {
+    test.doesNotThrow(runner("+ this is some text!\r\n"));
+    test.done();
+  },
+
+  extra_eq: function(test) {
+    test.doesNotThrow(runner("+ aef4====\r\n"));
+    test.done();
+  },
+
+});

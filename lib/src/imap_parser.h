@@ -30,6 +30,7 @@ enum data_types {
   IMAP_NUMBER,
   IMAP_RESPONSE,
   IMAP_BASE64,
+  IMAP_TEXT_OR_BASE64,
 };
 
 
