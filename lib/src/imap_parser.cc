@@ -41,7 +41,12 @@ enum parser_state {
   s_mailbox_list_str,
   s_nil_start,
   s_nil,
+
+  s_response_data_type_start,
   s_response_data_type,
+  s_response_data_type_numbered_start,
+  s_response_data_type_numbered,
+  s_msg_att,
 
   s_capability_data_start,
   s_capability_data_arg,
@@ -129,6 +134,9 @@ enum string_ref {
   STR_STATUS,
   STR_MESSAGES,
   STR_RECENT,
+  STR_EXISTS,
+  STR_FETCH,
+  STR_EXPUNGE,
 };
 
 
@@ -158,6 +166,9 @@ static const char *strings[] = {
   "STATUS",
   "MESSAGES",
   "RECENT",
+  "EXISTS",
+  "FETCH",
+  "EXPUNGE"
 };
 
 
@@ -258,8 +269,10 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
-
-      // Start of "*" SP (resp-cond-auth / resp-cond-bye) CRLF
+      /**
+       * ENTRY greeting
+       * FORMAT "*" SP (resp-cond-auth / resp-cond-bye) CRLF
+       */
       STATE_CASE(s_greeting_start);
         if (c != '*') ERR();
         SET_STATE(s_greeting_sp);
@@ -284,7 +297,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         str = strings[cur_string];
         if (str[index] == '\0' && c == ' ') {
           CB_ONDATA(p, IMAP_STATE);
-//          PRN("STATE", str_start, p);
           SET_STATE(s_final_crlf);
           PUSH_STATE(s_resp_text);
         }
@@ -295,8 +307,10 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
-
-      // Start of ( continue-req / response-data / response-tagged )
+      /**
+       * ENTRY response
+       * FORMAT ( continue-req / response-data / response-tagged )
+       */
       STATE_CASE(s_response_start);
         SET_STATE(s_final_crlf);
         switch (c) {
@@ -321,16 +335,14 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
           break;
         }
-
-     STATE_CASE(s_text_or_base64_start);
+        // Fall through
+      STATE_CASE(s_text_or_base64_start);
         str_start = p;
         SET_STATE(s_text_or_base64);
         index = 0;
       STATE_CASE(s_text_or_base64);
         if (!IS_TEXT_CHAR(c)) {
           if (index == 0) ERR();
-
-          PRN("TEXTORBASE64", str_start, p);
           if (index%4 == 0) {
             CB_ONDATA(p, IMAP_TEXT_OR_BASE64);
           }
@@ -352,117 +364,167 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
       STATE_CASE(s_response_data);
         if (c != '*') ERR();
-        SET_STATE(s_response_data_sp);
+        SET_STATE(s_response_data_type_start);
+        PUSH_STATE(s_sp);
         break;
-      STATE_CASE(s_response_data_sp);
-        if (c != ' ') ERR();
+      STATE_CASE(s_response_data_type_start);
+        index = 0;
+        str_start = p;
         SET_STATE(s_response_data_type);
-        break;
       STATE_CASE(s_response_data_type);
-        // cond-state (OK | NO | BAD)
-        // cond-bye (BYE)
-        // capability (CAPABILITY)
-        // mailbox-data 
-        //  FLAGS  *
-        //  LIST   *
-        //  LSUB   *
-        //  SEARCH
-        //  STATUS
-        //  # SP "exists"
-        //  # SP "recent"
-        // message-data # SP (EXPUNGE | FETCH)
-        SET_STATE(s_final_crlf);
-        switch (c) {
-          case 'O':
-          case 'N':
-            PUSH_STATE(s_cond_bye);
-            break;
-          case 'B': // BAD / BYE
+        /**
+         *  ("OK" / "NO" / "BAD") SP resp-text
+         *  "BYE" SP resp-text
+         *  "CAPABILITY" *(SP capability) SP "IMAP4rev1" *(SP capability)
+         * mailbox-data
+         *  "FLAGS" SP flag-list
+         *  "LIST" SP mailbox-list
+         *  "LSUB" SP mailbox-list
+         *  "SEARCH" *(SP nz-number)
+         *  "STATUS" SP mailbox SP "(" [status-att-list] ")"
+         *  number SP ("EXISTS" / "RECENT")
+         * message-data
+         *  nz-number SP ("EXPUNGE" / ("FETCH" SP msg-att))
+         */
+        if (index == 0) {
+          switch (c) {
+            case 'O':
+              cur_string = STR_OK;
+              break;
+            case 'N':
+              cur_string = STR_NO;
+              break;
+            case 'B':
+              cur_string = STR_BAD;
+              break;
+            case 'C':
+              cur_string = STR_CAPABILITY;
+              break;
+            case 'F':
+              cur_string = STR_FLAGS;
+              break;
+            case 'L':
+              cur_string = STR_LIST;
+              break;
+            case 'S':
+              cur_string = STR_SEARCH;
+              break;
+            default:
+              if (!IS_DIGIT(c)) ERR();
+              p--;
+              SET_STATE(s_response_data_type_numbered_start);
+              PUSH_STATE(s_sp);
+              PUSH_STATE(s_number);
+              cur_string = STR_UNKNOWN;
+              break;
+          }
+        }
+        else if (index == 1) {
+          switch (c) {
+            case 'Y':
+              if (cur_string == STR_BAD) {
+                cur_string = STR_BYE;
+              }
+              break;
+            case 'S':
+              if (cur_string == STR_LIST) {
+                cur_string = STR_LSUB;
+              }
+              break;
+            case 'T':
+              if (cur_string == STR_SEARCH) {
+                cur_string = STR_STATUS;
+              }
+              break;
+            default:
+              break;
+          }
+        }
 
-            break;
-          case 'C':
-            // TODO
-//            SET_STATE(s_capability_data);
-            break;
-          case 'F': //FLAGS
-          case 'L': // LIST / LSUB
-          case 'S': // SEARCH / STATUS
-            PUSH_STATE(s_mailbox_data);
-            p--;
-            break;
-        }
-        break;
-      STATE_CASE(s_mailbox_data);
-        switch(c) {
-          case 'F': cur_string = STR_FLAGS; break;
-          case 'L': cur_string = STR_LIST; break;
-          case 'S': cur_string = STR_SEARCH; break;
-          default:
-            if (IS_DIGIT(c)) {
-              //TODO
-            }
-            else {
-              ERR();
-            }
-            break;
-        }
-        SET_STATE(s_mailbox_data_two);
-        break;
-      STATE_CASE(s_mailbox_data_two);
-        switch (c) {
-          case 'S': 
-            if (cur_string == STR_LIST) {
-              cur_string = STR_LSUB;
-            }
-            break;
-          case 'T':
-            if (cur_string == STR_SEARCH) {
-              cur_string = STR_STATUS;
-            }
-            break;
-        }
-        index = 1;
-        SET_STATE(s_mailbox_data_three);
         str = strings[cur_string];
-        // Fall through
-      STATE_CASE(s_mailbox_data_three);
-        if (str[index] == '\0' && c == ' ') {
+        if (cur_string == STR_UNKNOWN) {
+          // changing state to numbered
+        }
+        else if (str[index] == '\0' && c == ' ') {
           switch (cur_string) {
+            case STR_OK:
+            case STR_NO:
+            case STR_BAD:
+            case STR_BYE:
+              SET_STATE(s_resp_text);
+              break;
+            case STR_CAPABILITY:
+              SET_STATE(s_capability_data_arg_start);
+              break;
             case STR_FLAGS:
-              // TODO Remember to filter out '\*' from list of these flags
+               // TODO Remember to filter out '\*' from list of these flags
               SET_STATE(s_permanentflags_args_start);
               break;
             case STR_LIST:
-              SET_STATE(s_mailbox_list_start);
-              break;
             case STR_LSUB:
-              SET_STATE(s_mailbox_list_start);
+               SET_STATE(s_mailbox_list_start);
               break;
             case STR_SEARCH:
               SET_STATE(s_optional_nznum);
               p--;
               break;
             case STR_STATUS:
-              // check for ( mailbox sp mailbox_status_att_list )
+               // check for ( mailbox sp mailbox_status_att_list )
               SET_STATE(s_mailbox_status_att_list_start);
               PUSH_STATE(s_sp);
               PUSH_STATE(s_mailbox);
               break;
             default:
               ERR();
+              break;
           }
-          break;
-        }
-        else if (str[index] == '\0' && cur_string == STR_SEARCH) {
-          // If the optional arguments for SEARCH are missing
-          POP_STATE();
-          p--;
         }
         else if (str[index] != c) {
           ERR();
         }
+
         index++;
         break;
+
+      STATE_CASE(s_response_data_type_numbered_start);
+        index = 0;
+        str_start = p;
+        SET_STATE(s_response_data_type_numbered);
+      STATE_CASE(s_response_data_type_numbered);
+        if (index == 0) {
+          switch (c) {
+            case 'R':
+              cur_string = STR_RECENT;
+              break;
+            case 'E':
+              cur_string = STR_EXISTS;
+              break;
+            case 'F':
+              cur_string = STR_FETCH;
+              break;
+          }
+        }
+        else if (index == 2 && cur_string == STR_EXISTS && strings[cur_string][2] == 'P') {
+          cur_string = STR_EXPUNGE;
+        }
+        str = strings[cur_string];
+        if (str[index] == '\0') {
+          if (cur_string == STR_FETCH) {
+            if (c != ' ') ERR();
+            SET_STATE(s_msg_att);
+          }
+          else {
+            p--;
+            POP_STATE();
+          }
+        }
+        else if (str[index] != c) {
+          ERR();
+        }
+
+        index++;
+        break;
+
 
       STATE_CASE(s_optional_nznum);
         if (c == '\r' || c == '\n') {

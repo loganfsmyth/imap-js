@@ -20,7 +20,7 @@ module.exports = testCase({
     console.log('----------------------');
     cb();
   },
-/*  mailbox_flags_one: function(test) {
+  mailbox_flags_one: function(test) {
     test.doesNotThrow(runner('* FLAGS ()\r\n'));
     test.done();
   },
@@ -43,7 +43,7 @@ module.exports = testCase({
   mailbox_search: function(test) {
     test.doesNotThrow(runner("* SEARCH 12 43\r\n"));
     test.done();
-  },*/
+  },
   mailbox_status: function(test) {
     test.doesNotThrow(runner("* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n"));
     test.done();
