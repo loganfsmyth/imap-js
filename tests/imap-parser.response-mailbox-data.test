@@ -20,7 +20,7 @@ module.exports = testCase({
     console.log('----------------------');
     cb();
   },
-  mailbox_flags_one: function(test) {
+/*  mailbox_flags_one: function(test) {
     test.doesNotThrow(runner('* FLAGS ()\r\n'));
     test.done();
   },
@@ -40,16 +40,15 @@ module.exports = testCase({
     test.doesNotThrow(runner('* LSUB (\\AHAHA) "B" "OMG"\r\n'));
     test.done();
   },
-  
   mailbox_search: function(test) {
     test.doesNotThrow(runner("* SEARCH 12 43\r\n"));
     test.done();
-  },
-  /*
-  base64_slash: function(test) {
-    test.doesNotThrow(runner("+ ae/31+CD\r\n"));
+  },*/
+  mailbox_status: function(test) {
+    test.doesNotThrow(runner("* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n"));
     test.done();
   },
+  /*
   text: function(test) {
     test.doesNotThrow(runner("+ this is some text!\r\n"));
     test.done();
