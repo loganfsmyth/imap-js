@@ -40,11 +40,12 @@ module.exports = testCase({
     test.doesNotThrow(runner('* LSUB (\\AHAHA) "B" "OMG"\r\n'));
     test.done();
   },
-  /*
-  base64_plus: function(test) {
-    test.doesNotThrow(runner("+ aef31+CD\r\n"));
+  
+  mailbox_search: function(test) {
+    test.doesNotThrow(runner("* SEARCH 12 43\r\n"));
     test.done();
   },
+  /*
   base64_slash: function(test) {
     test.doesNotThrow(runner("+ ae/31+CD\r\n"));
     test.done();

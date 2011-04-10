@@ -350,9 +350,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         // cond-bye (BYE)
         // capability (CAPABILITY)
         // mailbox-data 
-        //  FLAGS
-        //  LIST
-        //  LSUB
+        //  FLAGS  *
+        //  LIST   *
+        //  LSUB   *
         //  SEARCH
         //  STATUS
         //  # SP "exists"
@@ -427,6 +427,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
               break;
             case STR_SEARCH:
               SET_STATE(s_optional_nznum);
+              p--;
               break;
             case STR_STATUS:
               SET_STATE(s_mailbox_status_att_list);
@@ -435,11 +436,31 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           }
           break;
         }
+        else if (str[index] == '\0' && cur_string == STR_SEARCH) {
+          // If the optional arguments for SEARCH are missing
+          POP_STATE();
+          p--;
+        }
         else if (str[index] != c) {
           ERR();
         }
         index++;
         break;
+
+      STATE_CASE(s_optional_nznum);
+        if (c == '\r' || c == '\n') {
+          POP_STATE();
+          p--;
+        }
+        else if (c == ' ') {
+          SET_STATE(s_optional_nznum);
+          PUSH_STATE(s_nz_number_start);
+        }
+        else {
+          ERR();
+        }
+        break;
+
 
       STATE_CASE(s_mailbox_list_start);
         if (c != '(') ERR();
@@ -499,21 +520,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
-      STATE_CASE(s_nil_start);
-        index = 0;
-        SET_STATE(s_nil);
-        // Fall through
-      STATE_CASE(s_nil);
-        if ((index == 0 && c == 'N') || (index == 1 && c == 'I') || (index == 2 && c == 'L')) {
-          if (index == 2) {
-            POP_STATE();
-          }
-        }
-        else {
-          ERR();
-        }
-        index++;
-        break;
 
 
       // Start of ( tag SP resp-code-state CRLF )
@@ -579,22 +585,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           SET_STATE(s_resp_text_code_start);
           break;
         }
-        // Fall through
-      STATE_CASE(s_text_start);
-        if (!IS_TEXT_CHAR(c)) ERR();
-        str_start = p;
-        SET_STATE(s_text);
+        p--;
+        SET_STATE(s_text_start);
         break;
-      STATE_CASE(s_text);
-        if (!IS_TEXT_CHAR(c)) {
-          PRN("TEXT", str_start, p);
-          CB_ONDATA(p, IMAP_TEXT);
-
-          p--;
-          POP_STATE();
-        }
-        break;
-
       /**
        * Start of ("ALERT" / "BADCHARSET" [SP "(" astring *(SP astring) ")"] / capability-data / "PARSE" /
        *           "PERMANENTFLAGS" SP "(" [flag-perm *(flag-perm)] ")" / "READ-ONLY" / "READ-WRITE" / "TRYCREATE" /
@@ -670,7 +663,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
               case STR_UIDVALIDITY:
               case STR_UNSEEN:
                 if (c == ']') ERR();
-                SET_STATE(s_nz_number_start);
+                SET_STATE(s_resp_text_code_almost_done);
+                PUSH_STATE(s_nz_number_start);
 //                PRN("TEXTCODE", str_start, p);
                 CB_ONDATA(p, IMAP_TEXTCODE);
                 break;
@@ -811,8 +805,48 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
 
 
+      /**
+       * FUNCTION text
+       */
+      STATE_CASE(s_text_start);
+        if (!IS_TEXT_CHAR(c)) ERR();
+        str_start = p;
+        SET_STATE(s_text);
+        break;
+      STATE_CASE(s_text);
+        if (!IS_TEXT_CHAR(c)) {
+          PRN("TEXT", str_start, p);
+          CB_ONDATA(p, IMAP_TEXT);
+
+          p--;
+          POP_STATE();
+        }
+        break;
 
 
+      /**
+       * FUNCTION nil
+       */
+      STATE_CASE(s_nil_start);
+        index = 0;
+        SET_STATE(s_nil);
+        // Fall through
+      STATE_CASE(s_nil);
+        if ((index == 0 && c == 'N') || (index == 1 && c == 'I') || (index == 2 && c == 'L')) {
+          if (index == 2) {
+            POP_STATE();
+          }
+        }
+        else {
+          ERR();
+        }
+        index++;
+        break;
+
+
+      /**
+       * FUNCTION astring
+       */
       STATE_CASE(s_astring_start);
         switch (c) {
           case '{': SET_STATE(s_literal_start); break;
@@ -828,23 +862,25 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
       STATE_CASE(s_astring);
         if (!IS_ASTRING_CHAR(c)) {
-//          PRN("ASTRING", str_start, p);
           CB_ONDATA(p, IMAP_ASTRING);
-//          SET_STATE(s_resp_text_code_badcharset_args_done);
           POP_STATE();
           p--;
         }
         break;
 
+
+
+      /**
+       * FUNCTION nz_number
+       */
       STATE_CASE(s_nz_number_start);
-        if (c < '0' || c > '9') ERR();
+        if (c < '1' || c > '9') ERR();
         SET_STATE(s_nz_number);
         str_start = p;
         break;
       STATE_CASE(s_nz_number);
         if (!IS_DIGIT(c)) {
-          SET_STATE(s_resp_text_code_almost_done);
-//          PRN("NZNUM", str_start, p);
+          POP_STATE();
           CB_ONDATA(p, IMAP_NUMBER);
           p--;
           break;
@@ -852,6 +888,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
+      /**
+       * FUNCTION literal
+       */
       STATE_CASE(s_literal_start);
         if (c != '{') ERR();
         SET_STATE(s_literal_number_start);
@@ -876,15 +915,16 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
       STATE_CASE(s_literal_chars);
         index = (bytes_remaining < (pe-p))?bytes_remaining:(pe-p);
-//        PRN("LITERAL", p, p+index);
         str_start = p;
         CB_ONDATA(p+index, IMAP_LITERAL);
         p += index-1;
-//        SET_STATE(s_resp_text_code_badcharset_args_done);
         POP_STATE();
         break;
 
 
+      /**
+       * FUNCTION quoted
+       */
       STATE_CASE(s_quoted_start);
         if (!IS_DQUOTE(c)) ERR();
         SET_STATE(s_quoted);
@@ -896,20 +936,19 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else if (!(IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c))) {
           if (!IS_DQUOTE(c)) ERR();
-//          PRN("QUOTED", str_start, p);
           CB_ONDATA(p, IMAP_QUOTED);
-//          SET_STATE(s_resp_text_code_badcharset_args_done);
           POP_STATE();
         }
         break;
-
       STATE_CASE(s_quoted_escaped);
         if (!IS_QUOTED_SPECIAL(c)) ERR();
         SET_STATE(s_quoted);
         break;
 
 
-
+      /**
+       * FUNCTION check_crlf
+       */
       STATE_CASE(s_check_crlf);
         if (c == '\r') {
           SET_STATE(s_check_lf);
@@ -923,6 +962,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           ERR();
         }
         break;
+
+
+      /**
+       * RESPONSE Completion
+       */
       STATE_CASE(s_final_crlf);
         if (c == '\r') {
           SET_STATE(s_final_lf);
