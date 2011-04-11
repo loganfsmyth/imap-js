@@ -33,6 +33,7 @@ enum data_types {
   IMAP_TEXT_OR_BASE64,
   IMAP_MBXFLAG,
   IMAP_STATUS_ATT,
+  IMAP_NUMBERED_STR,
 };
 
 

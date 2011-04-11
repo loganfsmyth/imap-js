@@ -20,6 +20,7 @@ module.exports = testCase({
     console.log('----------------------');
     cb();
   },
+/*
   mailbox_flags_one: function(test) {
     test.doesNotThrow(runner('* FLAGS ()\r\n'));
     test.done();
@@ -48,15 +49,15 @@ module.exports = testCase({
     test.doesNotThrow(runner("* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n"));
     test.done();
   },
-  /*
-  text: function(test) {
-    test.doesNotThrow(runner("+ this is some text!\r\n"));
+*/
+  mailbox_numbered_expunge: function(test) {
+    test.doesNotThrow(runner("* 10 EXPUNGE\r\n"));
     test.done();
   },
 
-  extra_eq: function(test) {
-    test.doesNotThrow(runner("+ aef4====\r\n"));
+  mailbox_numbered_fetch: function(test) {
+    test.doesNotThrow(runner("* 5 FETCH (FLAGS (\\Recent))\r\n"));
     test.done();
   },
-*/
+
 });
