@@ -14,6 +14,12 @@ function runner(str) {
   }
 }
 
+var address = '("NAME" "ADL" "MAILBOX" "HOST")';
+var addr_list = "(" + address + address + ")";
+var envelope = '("DATE" "SUBJECT" ' + addr_list + ' NIL NIL NIL NIL NIL "INREPLYTO" "MESSAGEID")';
+var body_fields = '("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234';
+var body = '("TEXT" "OMG" ("hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234 0987)';
+
 module.exports = testCase({
   setUp: function(cb) {
     p.reinitialize(ImapParser.RESPONSE);
@@ -50,10 +56,30 @@ module.exports = testCase({
     test.done();
   },
 */
-  body_1part: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (BODY ("TEXT" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234 0987))\r\n'));
+  body_1part_messafe_rfc822: function(test) {
+    test.doesNotThrow(runner(
+      '* 5 FETCH (BODY (' + 
+      '"MESSAGE" "RFC822"' +  // media-message
+      ' ' + body_fields +  // SP body-fields
+      ' ' + envelope + 
+      ' ' + body + 
+      ' ' + '643' + 
+      '))\r\n'));
     test.done();
   },
+  body_1part_message: function(test) {
+    test.doesNotThrow(runner('* 5 FETCH (BODY ("MESSAGE" "OMG" ' + body_fields + '))\r\n'));
+    test.done();
+  },
+  body_1part_audio: function(test) {
+    test.doesNotThrow(runner('* 5 FETCH (BODY ("AUDIO" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234))\r\n'));
+    test.done();
+  },
+  body_1part_text: function(test) {
+    test.doesNotThrow(runner('* 5 FETCH (BODY ' + body + ')\r\n'));
+    test.done();
+  },
+  /*
   uid: function(test) {
     test.doesNotThrow(runner("* 5 FETCH (UID 1234)\r\n"));
     test.done();
@@ -74,5 +100,5 @@ module.exports = testCase({
     test.doesNotThrow(runner('* 5 FETCH (INTERNALDATE "10-Jan-2000 10:11:12 +0500")\r\n'));
     test.done();
   }
-
+*/
 });

@@ -50,6 +50,7 @@ enum parser_state {
   s_msg_att_start,
   s_msg_att,
   s_msg_att_two,
+  s_envelope_start,
   s_envelope,
   s_datetime_start,
   s_datetime,
@@ -57,6 +58,11 @@ enum parser_state {
   s_body,
   s_uniqueid,
   s_closeparen,
+
+  s_addr_nil_start,
+  s_addr_list_start,
+  s_addr_list_done,
+  s_address,
 
   s_body_start,
   s_body_mpart,
@@ -645,7 +651,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
               PUSH_STATE(s_permanentflags_args_start);
               break;
             case STR_ENVELOPE:
-              PUSH_STATE(s_envelope);
+              PUSH_STATE(s_envelope_start);
               break;
             case STR_INTERNALDATE:
               PUSH_STATE(s_datetime_start);
@@ -697,12 +703,98 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
+
+      /**
+       * FUNCTION envelope
+       * FORMAT   "(" nstring SP env-subject SP env-from SP env-sender SP env-reply-to SP env-to SP env-cc SP env-bcc SP nstring SP nstring ")"
+       */
+      STATE_CASE(s_envelope_start);
+        if (c != '(') ERR();
+        SET_STATE(s_envelope);
+        break;
       STATE_CASE(s_envelope);
-        //TODO
+        SET_STATE(s_closeparen);
+        PUSH_STATE(s_nstring);  // env-message-id
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_nstring);  // env-in-reply-to
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_addr_nil_start); // env-bcc
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_addr_nil_start); // env-cc
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_addr_nil_start); // env-to
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_addr_nil_start); // env-reply-to
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_addr_nil_start); // end-sender
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_addr_nil_start); // env-from
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_nstring);  // env-subject
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_nstring);  // env-date
+        p--;
+        break;
+
+
+      /**
+       * FUNCTION addr_nil
+       * FORMAT   "(" 1*address ")" / nil
+       */
+      STATE_CASE(s_addr_nil_start);
+        if (c != '(') {
+          SET_STATE(s_nil_start);
+        }
+        else {
+          SET_STATE(s_closeparen);
+          PUSH_STATE(s_addr_list_start);
+        }
+        p--;
+        break;
+
+      /**
+       * FUNCTION addr_list
+       * FORMAT 1*address
+       */
+      STATE_CASE(s_addr_list_start);
+        if (c != '(') ERR();
+        SET_STATE(s_addr_list_done);
+        PUSH_STATE(s_address);
+        break;
+      STATE_CASE(s_addr_list_done);
+        if (c == ')') {
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_address);
+          p--;
+        }
+        break;
+
+      /**
+       * FUNCTION address
+       * FORMAT "(" addr-name SP addr-adl SP addr-mailbox SP addr-host ")"
+       */
+      STATE_CASE(s_address);
+        if (c != '(') ERR();
+        SET_STATE(s_closeparen);
+        PUSH_STATE(s_nstring);  // addr-host
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_nstring);  // addr-mailbox
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_nstring);  // addr-adl
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_nstring);  // addr-name
         break;
 
 
 
+
+
+      /**
+       * FUNCTION body
+       * FORMAT   "(" (body-type-1part / body-type-mpart) ")"
+       */
       STATE_CASE(s_body_start);
         if (c != '(') ERR();
         SET_STATE(s_closeparen);
@@ -804,6 +896,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           else ERR();
         }
         index = 0;
+        str_start = p + 1; // TODO right?
         SET_STATE(s_body_1part_rfc822_message);
         break;
       STATE_CASE(s_body_1part_rfc822_message);
@@ -811,9 +904,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (str[index] == '\0' && c == '"') {
           SET_STATE(s_body_fld_lines);
           PUSH_STATE(s_sp);
-          PUSH_STATE(s_body);
+          PUSH_STATE(s_body_start);
           PUSH_STATE(s_sp);
-          PUSH_STATE(s_envelope);
+          PUSH_STATE(s_envelope_start);
           PUSH_STATE(s_sp);
           PUSH_STATE(s_body_fields);
           PUSH_STATE(s_sp);
@@ -824,6 +917,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           PUSH_STATE(s_sp);
           PUSH_STATE(s_quoted);
         }
+        index++;
         break;
 
 
