@@ -20,7 +20,7 @@ module.exports = testCase({
     console.log('----------------------');
     cb();
   },
-
+/*
   mailbox_flags_one: function(test) {
     test.doesNotThrow(runner('* FLAGS ()\r\n'));
     test.done();
@@ -49,16 +49,28 @@ module.exports = testCase({
     test.doesNotThrow(runner("* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n"));
     test.done();
   },
-
-  mailbox_numbered_expunge: function(test) {
-    test.doesNotThrow(runner("* 10 EXPUNGE\r\n"));
+*/
+  body_1part: function(test) {
+    test.doesNotThrow(runner('* 5 FETCH (BODY ("TEXT" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234 0987))\r\n'));
     test.done();
   },
-  mailbox_numbered_fetch: function(test) {
-    test.doesNotThrow(runner("* 5 FETCH (FLAGS (\\Recent))\r\n"));
+  uid: function(test) {
+    test.doesNotThrow(runner("* 5 FETCH (UID 1234)\r\n"));
     test.done();
   },
-  mailbox_num_fetch_static: function(test) {
+  rfc822_size: function(test) {
+    test.doesNotThrow(runner('* 5 FETCH (RFC822.SIZE 12432)\r\n'));
+    test.done();
+  },
+  rfc822_text: function(test) {
+    test.doesNotThrow(runner('* 5 FETCH (RFC822.TEXT "kshfda")\r\n'));
+    test.done();
+  },
+  rfc822: function(test) {
+    test.doesNotThrow(runner("* 5 FETCH (RFC822.HEADER NIL)\r\n"));
+    test.done();
+  },
+  internaldate: function(test) {
     test.doesNotThrow(runner('* 5 FETCH (INTERNALDATE "10-Jan-2000 10:11:12 +0500")\r\n'));
     test.done();
   }

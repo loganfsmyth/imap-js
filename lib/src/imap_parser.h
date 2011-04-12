@@ -34,6 +34,8 @@ enum data_types {
   IMAP_MBXFLAG,
   IMAP_STATUS_ATT,
   IMAP_NUMBERED_STR,
+  IMAP_DATETIME,
+  IMAP_NIL,
 };
 
 
