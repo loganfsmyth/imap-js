@@ -13,16 +13,12 @@ enum parser_state {
   s_greeting_sp,
   s_greeting_type_start,
   s_greeting_type,
-
-
   s_response_start,
-
   s_continue_req,
   s_continue_sp,
   s_continue_resp_or_base64,
   s_text_or_base64_start,
   s_text_or_base64,
-
   s_response_data_sp,
   s_cond_bye,
   s_mailbox_data,
@@ -41,15 +37,14 @@ enum parser_state {
   s_mailbox_list_str,
   s_nil_start,
   s_nil,
-
   s_response_data_type_start,
   s_response_data_type,
   s_response_data_type_numbered_start,
   s_response_data_type_numbered,
-
   s_msg_att_start,
   s_msg_att,
   s_msg_att_two,
+  s_msg_att_done,
   s_envelope_start,
   s_envelope,
   s_datetime_start,
@@ -315,6 +310,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
     c = *p;
 
     switch(state) {
+      /**
+       * FUNCTION parse_error
+       */
       STATE_CASE(s_parse_error);
         ERR();
         break;
@@ -599,9 +597,10 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         SET_STATE(s_msg_att);
         break;
       STATE_CASE(s_msg_att);
-       index = 0;
+        index = 0;
         cur_string = STR_UNKNOWN;
-        SET_STATE(s_msg_att_two);
+        SET_STATE(s_msg_att_done);
+        PUSH_STATE(s_msg_att_two);
       STATE_CASE(s_msg_att_two);
         if (index == 0) {
           switch (c) {
@@ -644,25 +643,23 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
         str = strings[cur_string];
         if (str[index] == '\0' && (c == ' ' || (cur_string == STR_BODY && c == '['))) {
-          SET_STATE(s_closeparen);
           switch (cur_string) {
             case STR_FLAGS:
-
-              PUSH_STATE(s_permanentflags_args_start);
+              SET_STATE(s_permanentflags_args_start);
               break;
             case STR_ENVELOPE:
-              PUSH_STATE(s_envelope_start);
+              SET_STATE(s_envelope_start);
               break;
             case STR_INTERNALDATE:
-              PUSH_STATE(s_datetime_start);
+              SET_STATE(s_datetime_start);
               break;
             case STR_RFC822:
             case STR_RFC822_HEADER:
             case STR_RFC822_TEXT:
-              PUSH_STATE(s_nstring);
+              SET_STATE(s_nstring);
               break;
             case STR_RFC822_SIZE:
-              PUSH_STATE(s_number_start);
+              SET_STATE(s_number_start);
               break;
             case STR_BODY:
               if (c == '[') {
@@ -670,11 +667,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
                 break;
               }
             case STR_BODYSTRUCTURE:
-              PUSH_STATE(s_body_start);
+              SET_STATE(s_body_start);
               break;
 
             case STR_UID:
-              PUSH_STATE(s_uniqueid);
+              SET_STATE(s_uniqueid);
               break;
             default:
               ERR();
@@ -687,6 +684,18 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
         index++;
         break;
+      STATE_CASE(s_msg_att_done);
+        if (c == ' ') {
+          SET_STATE(s_msg_att);
+        }
+        else if (c == ')') {
+          POP_STATE();
+        }
+        else {
+          ERR();
+        }
+        break;
+        
 
       STATE_CASE(s_optional_nznum);
         if (c == '\r' || c == '\n') {
@@ -744,12 +753,13 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_addr_nil_start);
         if (c != '(') {
           SET_STATE(s_nil_start);
+          p--;
         }
         else {
           SET_STATE(s_closeparen);
           PUSH_STATE(s_addr_list_start);
         }
-        p--;
+
         break;
 
       /**
@@ -757,9 +767,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * FORMAT 1*address
        */
       STATE_CASE(s_addr_list_start);
-        if (c != '(') ERR();
         SET_STATE(s_addr_list_done);
         PUSH_STATE(s_address);
+        p--;
         break;
       STATE_CASE(s_addr_list_done);
         if (c == ')') {
@@ -767,8 +777,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else {
           SET_STATE(s_address);
-          p--;
         }
+        p--;
         break;
 
       /**
@@ -841,6 +851,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           ERR();
         }
         break;
+
+      // Pick up 'TEXT', 'MESSAGE', or drop back to standard quoted string
       STATE_CASE(s_body_1part_message_text_or_string);
         if (c == 'M') {
           cur_string = STR_MESSAGE;
@@ -882,6 +894,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         index++;
         break;
 
+      // Choose between 'RFC822' , quoted, or literal
       // Choose between media-message and media-basic
       STATE_CASE(s_body_1part_rfc822_message_start);
         if (c != '"') {
@@ -1581,7 +1594,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           POP_STATE();
           CB_ONDATA(p, IMAP_NUMBER);
           p--;
-          break;
         }
         break;
 
@@ -1684,7 +1696,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         break;
 
-
       /**
        * RESPONSE Completion
        */
@@ -1723,6 +1734,7 @@ parse_error:
   parser->index = index;
   parser->cur_string = cur_string;
   parser->last_char = last_char;
+  parser->ch = c;
 
   return (p-data);
 }

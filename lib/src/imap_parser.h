@@ -48,12 +48,20 @@ struct imap_parser {
   unsigned char str_state;
 
   unsigned int last_char;
+  unsigned int ch;
   unsigned int index;
   unsigned int bytes_remaining;
 
   void* data;
 };
-#define PUSH_STATE(st) parser->state[parser->current_state++] = st
+#define PUSH_STATE(st) \
+do { \
+  parser->state[parser->current_state++] = st;    \
+  if (parser->current_state >= IMAP_STACK_SIZE) {  \
+    printf("OVERFLOW\r\n\r\n");            \
+  }   \
+} while(0)
+
 #define POP_STATE() parser->state[--parser->current_state]
 #define PEEK_STATE() parser->state[parser->current_state-1]
 #define SET_STATE(st) parser->state[parser->current_state-1] = st

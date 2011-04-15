@@ -107,6 +107,8 @@ public:
       e->ToObject()->Set(String::NewSymbol("bytesParsed"), parsed_amount_val);
       e->ToObject()->Set(String::NewSymbol("parsedTo"), String::New(buffer_data, parsed_amount));
       e->ToObject()->Set(String::NewSymbol("failureState"), Integer::New(self->parser.state[self->parser.current_state]));
+      e->ToObject()->Set(String::NewSymbol("lastChar"), String::New((const char*)&(self->parser.last_char), 1));
+      e->ToObject()->Set(String::NewSymbol("ch"), String::New((const char*)&(self->parser.ch), 1));
 
       return ThrowException(e);
     }

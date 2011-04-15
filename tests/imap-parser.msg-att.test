@@ -56,6 +56,32 @@ module.exports = testCase({
     test.done();
   },
 */
+
+
+  full_msg_att: function(test) {
+    var msg_att =
+          '(' +
+            'FLAGS (\\Seen) ' +
+            'INTERNALDATE "17-Jul-1996 02:44:25 -0700" ' +
+            'RFC822.SIZE 4286 ' +
+            'ENVELOPE (' +
+              '"Wed, 17 Jul 1996 02:23:25 -0700 (PDT)" ' +
+              '"IMAP4rev1 WG mtg summary and minutes" ' +
+              '(("T" NIL "g" "c")) ' +
+              '(("Te" NIL "gray" "cac.w.edu")) ' +
+              '(("Te" NIL "gray" "cac.w.edu")) ' +
+              '((NIL NIL "imap" "cac.washington.edu")) ' +
+              '((NIL NIL "mi" "CN")("Johin" NIL "KLE" "MIT.EDU")) '+
+              'NIL ' +
+              'NIL ' +
+              '"<B27@cac.n.edu>"' +
+            ') ' +
+            'BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028 92)' +
+          ')';
+    test.doesNotThrow(runner('* 12 FETCH ' + msg_att + '\r\n'));
+    test.done();
+  },
+/*
   body_1part_messafe_rfc822: function(test) {
     test.doesNotThrow(runner(
       '* 5 FETCH (BODY (' + 
