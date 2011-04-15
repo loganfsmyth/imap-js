@@ -72,6 +72,26 @@ enum parser_state {
   s_body_fld_param,
   s_body_fld_param_done,
 
+  s_section_start,
+  s_section,
+  s_section_done,
+  s_section_part,
+  s_section_msgtext_start,
+  s_section_msgtext,
+  s_section_text_start,
+  s_section_text,
+  s_opt_section_text,
+  s_body_section_start,
+  s_body_section_num,
+  s_body_section_num_done,
+  s_section_part_start,
+  s_section_part_text_or_num,
+
+  s_header_list_start,
+  s_header_list,
+  s_header_list_done,
+  s_header_fld_name,
+
   s_capability_data_start,
   s_capability_data_arg,
   s_capability_data_arg_start,
@@ -172,6 +192,10 @@ enum string_ref {
   STR_BODYSTRUCTURE,
   STR_MESSAGE,
   STR_TEXT,
+  STR_HEADER,
+  STR_HEADER_FIELDS,
+  STR_HEADER_FIELDS_NOT,
+  STR_MIME,
 };
 
 
@@ -215,6 +239,10 @@ static const char *strings[] = {
   "BODYSTRUCTURE",
   "MESSAGE",
   "TEXT",
+  "HEADER",
+  "HEADER.FIELDS",
+  "HEADER.FIELDS.NOT",
+  "MIME",
 };
 
 
@@ -663,7 +691,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
               break;
             case STR_BODY:
               if (c == '[') {
-                // TODO
+                SET_STATE(s_nstring);
+                PUSH_STATE(s_sp);
+                PUSH_STATE(s_body_section_num);
+                PUSH_STATE(s_section_start);
+                p--;
                 break;
               }
             case STR_BODYSTRUCTURE:
@@ -695,8 +727,218 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           ERR();
         }
         break;
-        
 
+
+      /**
+       * FUNCTION body_section_num
+       * FORMAT   [ "<" number ">" ]
+       */
+      STATE_CASE(s_body_section_num);
+        if (c != '<') ERR();
+        SET_STATE(s_body_section_num_done);
+        PUSH_STATE(s_number_start);
+        break;
+      STATE_CASE(s_body_section_num_done);
+        if (c != '>') ERR();
+        POP_STATE();
+        break;
+
+
+      /**
+       * FUNCTION section
+       * FORMAT   "[" [section-msgtext / ( section-part opt-section-text )] "]"
+       */
+      STATE_CASE(s_section_start);
+        if (c != '[') ERR();
+        SET_STATE(s_section);
+        break;
+      STATE_CASE(s_section);
+        if (c == ']') {
+          POP_STATE();
+        }
+        else if (c >= '1' && c <= '9') {
+          SET_STATE(s_section_done);
+          PUSH_STATE(s_opt_section_text);
+          PUSH_STATE(s_section_part_start);
+          p--;
+        }
+        else {
+          SET_STATE(s_section_done);
+          PUSH_STATE(s_section_msgtext_start);
+          p--;
+        }
+
+        break;
+      STATE_CASE(s_section_done);
+        if (c != ']') ERR();
+        POP_STATE();
+        break;
+
+
+      /**
+       * FUNCTION opt-section-text
+       * FORMAT   [ "." section-text ]
+       */
+      STATE_CASE(s_opt_section_text);
+        if (c != '.') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_section_text);
+        }
+        break;
+
+      /**
+       * FUNCTION section-part
+       * FORMAT   nz-number *("." nz-number) ["." section-text]
+       */
+      STATE_CASE(s_section_part_start);
+        p--;
+        SET_STATE(s_section_part);
+        PUSH_STATE(s_nz_number_start);
+        break;
+      STATE_CASE(s_section_part);
+        if (c != '.') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_section_part_text_or_num);
+        }
+        break;
+      STATE_CASE(s_section_part_text_or_num);
+        if (c >= '1' && c <= '9') {
+          SET_STATE(s_section_part);
+          PUSH_STATE(s_nz_number_start);
+        }
+        else {
+          SET_STATE(s_section_text_start);
+        }
+        p--;
+        break;
+
+
+      /**
+       * FUNCTION section-text
+       * FORMAT   section-msgtext / "MIME"
+       */
+      STATE_CASE(s_section_text_start);
+        index = 0;
+        cur_string = STR_MIME;
+        SET_STATE(s_section_text);
+      STATE_CASE(s_section_text);
+        str = strings[cur_string];
+        if (index == 0 && c != 'M') {
+          p--;
+          SET_STATE(s_section_msgtext_start);
+        }
+        else if (str[index] == '\0') {
+          p--;
+          POP_STATE();
+        }
+        else if (str[index] != c) {
+          ERR();
+        }
+        index++;
+        break;
+
+
+      /**
+       * FUNCTION section-msgtext
+       * FORMAT "HEADER" / ( "HEADER.FIELDS" [ ".NOT" ] SP header-list) / "TEXT" /  
+       */
+      STATE_CASE(s_section_msgtext_start);
+        index = 0;
+        str_start = p;
+        SET_STATE(s_section_msgtext);
+      STATE_CASE(s_section_msgtext);
+        if (index == 0) {
+          switch (c) {
+            case 'H':
+              cur_string = STR_HEADER;
+              break;
+            case 'T':
+              cur_string = STR_TEXT;
+              break;
+            default:
+              ERR();
+              break;
+          }
+        }
+        str = strings[cur_string];
+        if (str[index] == '\0') {
+          if (c == '.' && cur_string == STR_HEADER) {
+            cur_string = STR_HEADER_FIELDS;
+          }
+          else if (c == '.' && cur_string == STR_HEADER_FIELDS) {
+            cur_string = STR_HEADER_FIELDS_NOT;
+          }
+          else {
+            switch (cur_string) {
+              case STR_HEADER_FIELDS:
+              case STR_HEADER_FIELDS_NOT:
+                if (c == ' ') {
+                  SET_STATE(s_header_list_start);
+                }
+                else ERR();
+                break;
+              case STR_HEADER:
+              case STR_TEXT:
+                POP_STATE();
+                p--;
+                break;
+              default:
+                ERR();
+                break;
+            }
+          }
+        }
+        else if (str[index] != c) {
+          ERR();
+        }
+        index++;
+        break;
+
+
+      /**
+       * FUNCTION header-list
+       * FORMAT   "(" header-fld-name *(SP header-fld-name) ")"
+       */
+      STATE_CASE(s_header_list_start);
+        if (c != '(') ERR();
+        SET_STATE(s_header_list_done);
+        PUSH_STATE(s_header_fld_name);
+        break;
+      STATE_CASE(s_header_list_done);
+        if (c == ')') {
+          POP_STATE();
+        }
+        else if (c == ' ') {
+          SET_STATE(s_header_list_done);
+          PUSH_STATE(s_header_fld_name);
+        }
+        else {
+          ERR();
+        }
+        break;
+
+
+      /**
+       * FUNCTION header-fld-name
+       * FORMAT   astring
+       */
+      STATE_CASE(s_header_fld_name);
+        p--;
+        SET_STATE(s_astring_start);
+        break;
+
+
+      /**
+       * FUNCTION optional_nznum
+       * FORMAT   *(SP nz-number)
+       *   Used in mailbox-data
+       */
       STATE_CASE(s_optional_nznum);
         if (c == '\r' || c == '\n') {
           POP_STATE();
