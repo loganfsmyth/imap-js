@@ -82,6 +82,18 @@ module.exports = testCase({
     test.done();
   },
 */
+  body_mpart: function(test) {
+    test.doesNotThrow(runner(
+      '* 98 FETCH (BODY (' +
+        '("AUDIO" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234)' + //body
+        ' "kjhfds"' + 
+        ' ("omg" "OMG")' + ' ("dsp" ("dsp1" "dsp2"))' + ' NIL' + ' "LOC"' + ' 12' + // body-ext-mpart
+      '))\r\n'
+    ));
+    test.done();
+  },
+
+/*
   body_section_header_section_spec: function(test) {
     test.doesNotThrow(runner('* 6 FETCH (BODY[123.345.87.HEADER.FIELDS (hi there omg)]<5> "OMGHAHAH")\r\n'));
     test.done();
@@ -91,7 +103,7 @@ module.exports = testCase({
     test.done();
   },
 /*
-  body_1part_messafe_rfc822: function(test) {
+  body_1part_message_rfc822: function(test) {
     test.doesNotThrow(runner(
       '* 5 FETCH (BODY (' + 
       '"MESSAGE" "RFC822"' +  // media-message

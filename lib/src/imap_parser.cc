@@ -19,15 +19,8 @@ enum parser_state {
   s_continue_resp_or_base64,
   s_text_or_base64_start,
   s_text_or_base64,
-  s_response_data_sp,
-  s_cond_bye,
-  s_mailbox_data,
-  s_mailbox_data_two,
-  s_mailbox_data_three,
   s_mailbox_list_start,
-  s_mailbox_list,
   s_optional_nznum,
-  s_mailbox_status_att_list,
   s_mailbox_list_sp2,
   s_mailbox,
   s_mailbox_list_flags,
@@ -59,8 +52,24 @@ enum parser_state {
   s_addr_list_done,
   s_address,
 
+  s_body_mpart_start,
+  s_body_mpart_next,
+  s_body_mpart_done,
+  s_body_ext_mpart,
+  s_body_fld_dsp_start,
+  s_body_fld_dsp,
+  s_body_fld_lang,
+  s_body_fld_lang_done,
+  s_body_fld_loc,
+  s_body_extension,
+  s_body_extension_done,
+
+  s_body_ext_mpart_opt_fld_dsp,
+  s_body_ext_mpart_opt_fld_lang,
+  s_body_ext_mpart_opt_fld_loc,
+  s_body_ext_mpart_opt_body_ext,
+
   s_body_start,
-  s_body_mpart,
   s_body_fields,
   s_body_1part_start,
   s_body_1part_type,
@@ -81,14 +90,12 @@ enum parser_state {
   s_section_text_start,
   s_section_text,
   s_opt_section_text,
-  s_body_section_start,
   s_body_section_num,
   s_body_section_num_done,
   s_section_part_start,
   s_section_part_text_or_num,
 
   s_header_list_start,
-  s_header_list,
   s_header_list_done,
   s_header_fld_name,
 
@@ -246,6 +253,7 @@ static const char *strings[] = {
 };
 
 
+
 #define IS_ALPHA(c) ( (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) )
 #define IS_DIGIT(c) (c >= 0x30 && c <= 0x39)
 #define IS_HEXDIG(c) (IS_DIGIT(c) || (c >= 0x41 && c  <= 0x50))
@@ -345,6 +353,13 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         ERR();
         break;
 
+
+      /**
+       * ENTRY command
+       */
+      STATE_CASE(s_command_start);
+        // TODO
+        break;
 
       /**
        * ENTRY greeting
@@ -789,6 +804,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         break;
 
+
       /**
        * FUNCTION section-part
        * FORMAT   nz-number *("." nz-number) ["." section-text]
@@ -1054,7 +1070,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
       STATE_CASE(s_body);
         if (c == '(') {
-          SET_STATE(s_body_mpart);
+          SET_STATE(s_body_mpart_start);
         }
         else {
           SET_STATE(s_body_1part_start);
@@ -1072,7 +1088,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        *  """ "MESSAGE" """ SP """ "RFC822" """ SP body-fields SP envelope SP body SP body-fld-lines
        *  """ "TEXT" """ SP string SP body-fields SP body-fld-lines
        * ) 
-       * [SP body-ext-1part]
+       * [SP body-ext-1part] // TODO
        */
       STATE_CASE(s_body_1part_start);
         if (c == '{') {
@@ -1176,8 +1192,180 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
-      STATE_CASE(s_body_mpart);
+      /**
+       * FUNCTION body-mpart
+       * FORMAT   1*body SP media-subtype [SP body-ext-mpart]
+       */
+      STATE_CASE(s_body_mpart_start);
+        SET_STATE(s_body_mpart_next);
+        PUSH_STATE(s_body_start);
+        p--;
+        break;
+      STATE_CASE(s_body_mpart_next);
+        if (c == '(') {
+          SET_STATE(s_body_mpart_next);
+          PUSH_STATE(s_body_start);
+          p--;
+        }
+        else if (c == ' ') {
+          SET_STATE(s_body_mpart_done);
+          PUSH_STATE(s_string);
+        }
+        else {
+          ERR();
+        }
+        break;
+      STATE_CASE(s_body_mpart_done);
+        if (c != ' ') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_body_ext_mpart);
+        }
+        break;
 
+
+      /**
+       * FUNCTION body-ext-mpart
+       * FORMAT   body-fld-param [SP body-fld-dsp [SP body-fld-lang [SP body-fld-loc *(SP body-extension)]]]
+       */
+      STATE_CASE(s_body_ext_mpart);
+        p--;
+        SET_STATE(s_body_ext_mpart_opt_fld_dsp);
+        PUSH_STATE(s_body_fld_param_start);
+        break;
+      STATE_CASE(s_body_ext_mpart_opt_fld_dsp);
+        if (c != ' ') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_body_ext_mpart_opt_fld_lang);
+          PUSH_STATE(s_body_fld_dsp);
+        }
+        break;
+      STATE_CASE(s_body_ext_mpart_opt_fld_lang);
+        if (c != ' ') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_body_ext_mpart_opt_fld_loc);
+          PUSH_STATE(s_body_fld_lang);
+        }
+        break;
+      STATE_CASE(s_body_ext_mpart_opt_fld_loc);
+        if (c != ' ') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_body_ext_mpart_opt_body_ext);
+          PUSH_STATE(s_body_fld_loc);
+        }
+        break;
+      STATE_CASE(s_body_ext_mpart_opt_body_ext);
+        if (c != ' ') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_body_ext_mpart_opt_body_ext);
+          PUSH_STATE(s_body_extension);
+        }
+        break;
+
+
+
+      /**
+       * FUNCTION body-fld-dsp
+       * FORMAT   "(" string SP body-fld-param ")" / nil
+       */
+      STATE_CASE(s_body_fld_dsp_start);
+        if (c != '(') {
+          if (c == 'N') {
+            SET_STATE(s_nil_start);
+          }
+          else {
+            ERR();
+          }
+        }
+        SET_STATE(s_body_fld_dsp);
+        break;
+      STATE_CASE(s_body_fld_dsp);
+        SET_STATE(s_closeparen);
+        PUSH_STATE(s_body_fld_param_start);
+        PUSH_STATE(s_sp);
+        PUSH_STATE(s_string);
+        break;
+
+
+      /**
+       * FUNCTION body-fld-lang
+       */
+      STATE_CASE(s_body_fld_lang);
+        if (c != '(') {
+          p--;
+          SET_STATE(s_nstring);
+        }
+        else {
+          SET_STATE(s_body_fld_lang_done);
+          PUSH_STATE(s_string);
+        }
+        break;
+      STATE_CASE(s_body_fld_lang_done);
+        if (c == ' ') {
+          SET_STATE(s_body_fld_lang_done);
+          PUSH_STATE(s_string);
+        }
+        else if (c != ')') {
+          ERR();
+        }
+        else {
+          POP_STATE();
+        }
+        break;
+
+
+      /**
+       * FUNCTION body-fld-loc
+       */
+      STATE_CASE(s_body_fld_loc);
+        p--;
+        SET_STATE(s_nstring);
+        break;
+
+
+      /**
+       * FUNCTION body-extension
+       */
+      STATE_CASE(s_body_extension);
+        if (c == '(') {
+          SET_STATE(s_body_extension_done);
+          PUSH_STATE(s_body_extension);
+        }
+        else if (IS_DIGIT(c)) {
+          p--;
+          SET_STATE(s_number_start);
+        }
+        else {
+          p--;
+          SET_STATE(s_nstring);
+        }
+        break;
+      STATE_CASE(s_body_extension_done);
+        if (c == ' ') {
+          SET_STATE(s_body_extension_done);
+          PUSH_STATE(s_body_extension);
+        }
+        else if (c == ')') {
+          POP_STATE();
+        }
+        else {
+          ERR();
+        }
+        break;
 
       /**
        * FUNCTION body-fields
