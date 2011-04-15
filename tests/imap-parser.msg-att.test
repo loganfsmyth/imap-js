@@ -111,7 +111,8 @@ module.exports = testCase({
       ' ' + envelope + 
       ' ' + body + 
       ' ' + '643' + 
-      '))\r\n'));
+      '))\r\n'
+    ));
     test.done();
   },
   body_1part_message: function(test) {
