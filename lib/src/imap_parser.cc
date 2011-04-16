@@ -148,6 +148,23 @@ enum parser_state {
   s_flag_perm_check,
   s_flag_perm,
 
+  s_addr_adl,
+  s_addr_host,
+  s_addr_mailbox,
+  s_addr_name,
+  s_body_fld_desc,
+  s_body_fld_id,
+  s_body_fld_md5,
+  s_body_fld_octets,
+  s_env_date,
+  s_env_in_reply_to,
+  s_env_message_id,
+  s_env_subject,
+
+  s_password,
+  s_userid,
+  s_media_subtype,
+
   s_command_start,
 };
 
@@ -932,16 +949,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
 
       /**
-       * FUNCTION header-fld-name
-       * FORMAT   astring
-       */
-      STATE_CASE(s_header_fld_name);
-        p--;
-        SET_STATE(s_astring_start);
-        break;
-
-
-      /**
        * FUNCTION optional_nznum
        * FORMAT   *(SP nz-number)
        *   Used in mailbox-data
@@ -1320,15 +1327,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
 
       /**
-       * FUNCTION body-fld-loc
-       */
-      STATE_CASE(s_body_fld_loc);
-        p--;
-        SET_STATE(s_nstring);
-        break;
-
-
-      /**
        * FUNCTION body-extension
        */
       STATE_CASE(s_body_extension);
@@ -1357,6 +1355,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           ERR();
         }
         break;
+
 
       /**
        * FUNCTION body-fields
@@ -1414,16 +1413,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
 
       /**
-       * FUNCTION body-fld-lines
-       * FORMAT   number
-       */
-      STATE_CASE(s_body_fld_lines);
-        p--;
-        SET_STATE(s_number_start);
-        break;
-
-
-      /**
        * FUNCTION mailbox-list
        */
       STATE_CASE(s_mailbox_list_start);
@@ -1432,8 +1421,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
       STATE_CASE(s_mailbox_list_flags);
         if (c == ')') {
-          SET_STATE(s_sp);
-          PUSH_STATE(s_mailbox_list_str);
+          SET_STATE(s_mailbox_list_str);
+          PUSH_STATE(s_sp);
           break;
         }
         if (c != '\\') {
@@ -1857,14 +1846,20 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
-      /**
-       * FUNCTION uniqueid
-       * FORMAT   nz-number
-       */
-      STATE_CASE(s_uniqueid);
-        p--;
-        SET_STATE(s_nz_number_start);
-        break;
+      // Declare types that are nstring aliases
+      STATE_CASE(s_addr_adl);
+      STATE_CASE(s_addr_host);
+      STATE_CASE(s_addr_mailbox);
+      STATE_CASE(s_addr_name);
+      STATE_CASE(s_body_fld_desc);
+      STATE_CASE(s_body_fld_id);
+      STATE_CASE(s_body_fld_loc);
+      STATE_CASE(s_body_fld_md5);
+      STATE_CASE(s_env_date);
+      STATE_CASE(s_env_in_reply_to);
+      STATE_CASE(s_env_message_id);
+      STATE_CASE(s_env_subject);
+        // Fall through
 
 
       /**
@@ -1889,15 +1884,6 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_sp);
         if (c != ' ') ERR();
         POP_STATE();
-        break;
-
-
-      /**
-       * FUNCTION mailbox
-       */
-      STATE_CASE(s_mailbox);
-        p--;
-        SET_STATE(s_astring_start);
         break;
 
 
@@ -1943,6 +1929,14 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
+      // Declare astring aliases
+      STATE_CASE(s_header_fld_name);
+      STATE_CASE(s_mailbox);    //  matches ("INBOX" / astring) but INBOX can be matches as an astring
+      STATE_CASE(s_password);
+      STATE_CASE(s_userid);
+        // Fall through
+
+
       /**
        * FUNCTION astring
        * FORMAT   1*ASTRING-CHAR / string
@@ -1970,6 +1964,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
+      // Declare string aliases
+      STATE_CASE(s_media_subtype);
+        // Fall through
+
+
       /**
        * FUNCTION string
        * FORMAT   quoted / literal
@@ -1989,6 +1988,12 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
+      // Declare number aliases
+      STATE_CASE(s_body_fld_lines);
+      STATE_CASE(s_body_fld_octets);
+        // Fall through
+
+
       /**
        * FUNCTION number
        * FORMAT   1*DIGIT
@@ -2005,6 +2010,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
         }
         break;
+
+
+      // Declare nz-number aliases
+      STATE_CASE(s_uniqueid);
+        // Fall through
 
 
       /**
