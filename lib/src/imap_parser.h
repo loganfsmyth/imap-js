@@ -64,6 +64,8 @@ do { \
   }   \
 } while(0)
 
+
+#define PUSH_PREV_STATE() parser->current_state++;
 #define POP_STATE() parser->state[--parser->current_state]
 #define PEEK_STATE() parser->state[parser->current_state-1]
 #define SET_STATE(st) parser->state[parser->current_state-1] = st

@@ -29,8 +29,6 @@ var msg_att =
     'BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028 92)' +
   ')';
 
-
-
 ps('mailbox_flags_one',     '* FLAGS ()\r\n');
 ps('mailbox_flags_two',     "* FLAGS (\\Noinferiors \\Noselect)\r\n");
 ps('mailbox_list',          '* LIST () "A" "haha"\r\n');

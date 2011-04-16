@@ -5,10 +5,12 @@ var ps = test_utils.parse_success;
 
 ps('cap',         "* OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE STARTTLS LOGINDISABLED] Dovecot ready.\r\n");
 ps('badcharset',  "* OK [BADCHARSET (OMG WHAT HAHAH)] OH YEAH\r\n");
+
 ps('badcharset_literal',      "* OK [BADCHARSET ({5}\r\nABCDE)] OH YEAH\r\n");
 ps('badcharset_literal_two',  "* OK [BADCHARSET (\"BADSET\")] OH YEAH\r\n");
 ps('perm',        "* OK [PERMANENTFLAGS (\\Answered \\* FLAG)] OH YEAH\r\n");
 ps('perm2',       "* OK [PERMANENTFLAGS ()] OH YEAH\r\n");
+
 ps('unseen',      "* OK [UNSEEN 10] OH YEAH\r\n");
 ps('readonly',    '* OK [READ-ONLY] Failure\r\n');
 ps('alert',       '* OK [ALERT] Failure\r\n');
