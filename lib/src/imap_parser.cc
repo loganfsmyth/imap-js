@@ -160,6 +160,7 @@ enum parser_state {
   s_env_in_reply_to,
   s_env_message_id,
   s_env_subject,
+  s_body_fld_enc,
 
   s_password,
   s_userid,
@@ -291,8 +292,6 @@ static const char *strings[] = {
 #define IS_ATOM_CHAR(c) (IS_CHAR(c) && !IS_ATOM_SPECIAL(c))
 #define IS_ASTRING_CHAR(c) (IS_RESP_SPECIAL(c) || IS_ATOM_CHAR(c))
 
-//#define IS_QUOTED_CHAR(c, prev) ((IS_TEXT_CHAR(c) && !IS_QUOTED_SPECIAL(c)) || (prev == '\\' && IS_QUOTED_SPECIAL(c)))
-
 #define PRN(str, start, end)   \
 do {    \
   char* to = strndup(start, (end-start)); \
@@ -303,10 +302,10 @@ do {    \
 #define CB_ONDATA(end, type)                                      \
 if (str_start && settings->on_data) {                             \
   settings->on_data(parser, str_start, (end - str_start), type);  \
-  if (type != IMAP_NONE) {                                        \
-    str_start = NULL;                                             \
-  }                                                               \
+  str_start = NULL;                                               \
+  parser->parsing = (type == IMAP_NONE);                          \
 }
+
 
 #define CB_ONDONE(type)                           \
 if (settings->on_done) {                          \
@@ -322,6 +321,7 @@ void imap_parser_init(imap_parser* parser, enum parser_types type) {
   parser->index = 0;
   parser->last_char = '\0';
   parser->current_state = 0;
+  parser->parsing = 0;
 
   PUSH_STATE(s_parse_error);
   switch (type) {
@@ -353,6 +353,10 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
   const char *p, *pe, *str;
 
   const char* str_start = NULL;
+
+  if (parser->parsing != 0) {
+    str_start = data;
+  }
 
   for (p = data, pe = data+len; p != pe; p++ ) {
     state = (enum parser_state)PEEK_STATE();
@@ -1362,13 +1366,13 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * FORMAT   body-fld-param SP body-fld-id SP body-fld-desc SP body-fld-enc SP body-fld-octets
        */
       STATE_CASE(s_body_fields);
-        SET_STATE(s_number_start);   // fld-octets
+        SET_STATE(s_body_fld_octets);
         PUSH_STATE(s_sp);
-        PUSH_STATE(s_string);   // fld-enc
+        PUSH_STATE(s_body_fld_enc);
         PUSH_STATE(s_sp);
-        PUSH_STATE(s_nstring);  // fld-desc
+        PUSH_STATE(s_body_fld_desc);
         PUSH_STATE(s_sp);
-        PUSH_STATE(s_nstring);  // fld-id
+        PUSH_STATE(s_body_fld_id);
         PUSH_STATE(s_sp);
         PUSH_STATE(s_body_fld_param_start);
         p--;
@@ -1966,6 +1970,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
       // Declare string aliases
       STATE_CASE(s_media_subtype);
+      STATE_CASE(s_body_fld_enc); // string / (""" ("7BIT" / "8BIT" / "BINARY" / "BASE64" / "QUOTED-PRINTABLE") """)
         // Fall through
 
 

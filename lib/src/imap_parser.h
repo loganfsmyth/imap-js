@@ -52,6 +52,8 @@ struct imap_parser {
   unsigned int index;
   unsigned int bytes_remaining;
 
+  char parsing;
+
   void* data;
 };
 #define PUSH_STATE(st) \

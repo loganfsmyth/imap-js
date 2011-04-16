@@ -1,66 +1,17 @@
 
-var testCase = require('nodeunit').testCase;
-var ImapParser = require('../lib/imap-parser').ImapParser;
-var p = new ImapParser(ImapParser.RESPONSE);
+var test_utils = require('./test-utils');
+test_utils.type('r');
+var ps = test_utils.parse_success;
 
-function runner(str) {
-  var b = new Buffer(str);
+ps('mailbox_flags',             '* FLAGS ()\r\n');
+ps('mailbox_flags_two',         "* FLAGS (\\Noinferiors \\Noselect)\r\n");
+ps('mailbox_list',              '* LIST () "A" "haha"\r\n');
+ps('mailbox_list_two',          '* LIST () NIL "hahah"\r\n');
+ps('mailbox_lsub',              '* LSUB (\\AHAHA) "B" "OMG"\r\n');
+ps('mailbox_search',            "* SEARCH 12 43\r\n");
+ps('mailbox_status',            "* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n");
+ps('mailbox_numbered_expunge',  "* 10 EXPUNGE\r\n");
+ps('mailbox_numbered_fetch',    "* 5 FETCH (FLAGS (\\Recent))\r\n");
+ps('mailbox_num_fetch_static',  '* 5 FETCH (INTERNALDATE "10-Jan-2000 10:11:12 +0500")\r\n');
 
-  return function() {
-    p.execute( b );
-    if (!p.isDone()) {
-        throw new Error("Command Incomplete");
-    }
-  }
-}
-
-module.exports = testCase({
-  setUp: function(cb) {
-    p.reinitialize(ImapParser.RESPONSE);
-    console.log('----------------------');
-    cb();
-  },
-
-  mailbox_flags_one: function(test) {
-    test.doesNotThrow(runner('* FLAGS ()\r\n'));
-    test.done();
-  },
-  mailbox_flags_two: function(test) {
-    test.doesNotThrow(runner("* FLAGS (\\Noinferiors \\Noselect)\r\n"));
-    test.done();
-  },
-  mailbox_list: function(test) {
-    test.doesNotThrow(runner('* LIST () "A" "haha"\r\n'));
-    test.done();
-  },
-  mailbox_list_two: function(test) {
-    test.doesNotThrow(runner('* LIST () NIL "hahah"\r\n'));
-    test.done();
-  },
-  mailbox_lsub: function(test) {
-    test.doesNotThrow(runner('* LSUB (\\AHAHA) "B" "OMG"\r\n'));
-    test.done();
-  },
-  mailbox_search: function(test) {
-    test.doesNotThrow(runner("* SEARCH 12 43\r\n"));
-    test.done();
-  },
-  mailbox_status: function(test) {
-    test.doesNotThrow(runner("* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n"));
-    test.done();
-  },
-
-  mailbox_numbered_expunge: function(test) {
-    test.doesNotThrow(runner("* 10 EXPUNGE\r\n"));
-    test.done();
-  },
-  mailbox_numbered_fetch: function(test) {
-    test.doesNotThrow(runner("* 5 FETCH (FLAGS (\\Recent))\r\n"));
-    test.done();
-  },
-  mailbox_num_fetch_static: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (INTERNALDATE "10-Jan-2000 10:11:12 +0500")\r\n'));
-    test.done();
-  }
-
-});
+module.exports = test_utils.tests();

@@ -1,3 +1,6 @@
+//TODO update to use test-utils and split into separate files
+
+
 var testCase = require('nodeunit').testCase;
 var ImapParser = require('../lib/imap-parser').ImapParser;
 var p = new ImapParser(ImapParser.RESPONSE);

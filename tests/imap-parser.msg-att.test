@@ -1,152 +1,69 @@
 
-var testCase = require('nodeunit').testCase;
-var ImapParser = require('../lib/imap-parser').ImapParser;
-var p = new ImapParser(ImapParser.RESPONSE);
 
-function runner(str) {
-  var b = new Buffer(str);
-
-  return function() {
-    p.execute( b );
-    if (!p.isDone()) {
-        throw new Error("Command Incomplete");
-    }
-  }
-}
+var test_utils = require('./test-utils');
+test_utils.type('r');
+var ps = test_utils.parse_success;
 
 var address = '("NAME" "ADL" "MAILBOX" "HOST")';
 var addr_list = "(" + address + address + ")";
 var envelope = '("DATE" "SUBJECT" ' + addr_list + ' NIL NIL NIL NIL NIL "INREPLYTO" "MESSAGEID")';
 var body_fields = '("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234';
 var body = '("TEXT" "OMG" ("hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234 0987)';
+var msg_att =
+  '(' +
+    'FLAGS (\\Seen) ' +
+    'INTERNALDATE "17-Jul-1996 02:44:25 -0700" ' +
+    'RFC822.SIZE 4286 ' +
+    'ENVELOPE (' +
+      '"Wed, 17 Jul 1996 02:23:25 -0700 (PDT)" ' +
+      '"IMAP4rev1 WG mtg summary and minutes" ' +
+      '(("T" NIL "g" "c")) ' +
+      '(("Te" NIL "gray" "cac.w.edu")) ' +
+      '(("Te" NIL "gray" "cac.w.edu")) ' +
+      '((NIL NIL "imap" "cac.washington.edu")) ' +
+      '((NIL NIL "mi" "CN")("Johin" NIL "KLE" "MIT.EDU")) '+
+      'NIL ' +
+      'NIL ' +
+      '"<B27@cac.n.edu>"' +
+    ') ' +
+    'BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028 92)' +
+  ')';
 
-module.exports = testCase({
-  setUp: function(cb) {
-    p.reinitialize(ImapParser.RESPONSE);
-    console.log('----------------------');
-    cb();
-  },
-/*
-  mailbox_flags_one: function(test) {
-    test.doesNotThrow(runner('* FLAGS ()\r\n'));
-    test.done();
-  },
-  mailbox_flags_two: function(test) {
-    test.doesNotThrow(runner("* FLAGS (\\Noinferiors \\Noselect)\r\n"));
-    test.done();
-  },
-  mailbox_list: function(test) {
-    test.doesNotThrow(runner('* LIST () "A" "haha"\r\n'));
-    test.done();
-  },
-  mailbox_list_two: function(test) {
-    test.doesNotThrow(runner('* LIST () NIL "hahah"\r\n'));
-    test.done();
-  },
-  mailbox_lsub: function(test) {
-    test.doesNotThrow(runner('* LSUB (\\AHAHA) "B" "OMG"\r\n'));
-    test.done();
-  },
-  mailbox_search: function(test) {
-    test.doesNotThrow(runner("* SEARCH 12 43\r\n"));
-    test.done();
-  },
-  mailbox_status: function(test) {
-    test.doesNotThrow(runner("* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n"));
-    test.done();
-  },
-*/
 
-/*
-  full_msg_att: function(test) {
-    var msg_att =
-          '(' +
-            'FLAGS (\\Seen) ' +
-            'INTERNALDATE "17-Jul-1996 02:44:25 -0700" ' +
-            'RFC822.SIZE 4286 ' +
-            'ENVELOPE (' +
-              '"Wed, 17 Jul 1996 02:23:25 -0700 (PDT)" ' +
-              '"IMAP4rev1 WG mtg summary and minutes" ' +
-              '(("T" NIL "g" "c")) ' +
-              '(("Te" NIL "gray" "cac.w.edu")) ' +
-              '(("Te" NIL "gray" "cac.w.edu")) ' +
-              '((NIL NIL "imap" "cac.washington.edu")) ' +
-              '((NIL NIL "mi" "CN")("Johin" NIL "KLE" "MIT.EDU")) '+
-              'NIL ' +
-              'NIL ' +
-              '"<B27@cac.n.edu>"' +
-            ') ' +
-            'BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028 92)' +
-          ')';
-    test.doesNotThrow(runner('* 12 FETCH ' + msg_att + '\r\n'));
-    test.done();
-  },
-*/
-  body_mpart: function(test) {
-    test.doesNotThrow(runner(
-      '* 98 FETCH (BODY (' +
-        '("AUDIO" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234)' + //body
-        ' "kjhfds"' + 
-        ' ("omg" "OMG")' + ' ("dsp" ("dsp1" "dsp2"))' + ' NIL' + ' "LOC"' + ' 12' + // body-ext-mpart
-      '))\r\n'
-    ));
-    test.done();
-  },
 
-/*
-  body_section_header_section_spec: function(test) {
-    test.doesNotThrow(runner('* 6 FETCH (BODY[123.345.87.HEADER.FIELDS (hi there omg)]<5> "OMGHAHAH")\r\n'));
-    test.done();
-  },
-  body_section_header_fields: function(test) {
-    test.doesNotThrow(runner('* 6 FETCH (BODY[HEADER.FIELDS (hi there omg)]<5> "OMGHAHAH")\r\n'));
-    test.done();
-  },
-/*
-  body_1part_message_rfc822: function(test) {
-    test.doesNotThrow(runner(
-      '* 5 FETCH (BODY (' + 
-      '"MESSAGE" "RFC822"' +  // media-message
-      ' ' + body_fields +  // SP body-fields
-      ' ' + envelope + 
-      ' ' + body + 
-      ' ' + '643' + 
-      '))\r\n'
-    ));
-    test.done();
-  },
-  body_1part_message: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (BODY ("MESSAGE" "OMG" ' + body_fields + '))\r\n'));
-    test.done();
-  },
-  body_1part_audio: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (BODY ("AUDIO" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234))\r\n'));
-    test.done();
-  },
-  body_1part_text: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (BODY ' + body + ')\r\n'));
-    test.done();
-  },
-  /*
-  uid: function(test) {
-    test.doesNotThrow(runner("* 5 FETCH (UID 1234)\r\n"));
-    test.done();
-  },
-  rfc822_size: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (RFC822.SIZE 12432)\r\n'));
-    test.done();
-  },
-  rfc822_text: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (RFC822.TEXT "kshfda")\r\n'));
-    test.done();
-  },
-  rfc822: function(test) {
-    test.doesNotThrow(runner("* 5 FETCH (RFC822.HEADER NIL)\r\n"));
-    test.done();
-  },
-  internaldate: function(test) {
-    test.doesNotThrow(runner('* 5 FETCH (INTERNALDATE "10-Jan-2000 10:11:12 +0500")\r\n'));
-    test.done();
-  }
-*/
-});
+ps('mailbox_flags_one',     '* FLAGS ()\r\n');
+ps('mailbox_flags_two',     "* FLAGS (\\Noinferiors \\Noselect)\r\n");
+ps('mailbox_list',          '* LIST () "A" "haha"\r\n');
+ps('mailbox_list_two',      '* LIST () NIL "hahah"\r\n');
+ps('mailbox_lsub',          '* LSUB (\\AHAHA) "B" "OMG"\r\n');
+ps('mailbox_search',        "* SEARCH 12 43\r\n");
+ps('mailbox_status',        "* STATUS INBOX (MESSAGES 12 RECENT 40 UNSEEN 4)\r\n");
+ps('full_msg_att',          '* 12 FETCH ' + msg_att + '\r\n');
+ps('body_mpart',
+  '* 98 FETCH (BODY (' ,
+    '("AUDIO" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234)' , //body
+    ' "kjhfds"' ,
+    ' ("omg" "OMG")' + ' ("dsp" ("dsp1" "dsp2"))' + ' NIL' + ' "LOC"' + ' 12' , // body-ext-mpart
+  '))\r\n'
+);
+ps('body_section_header_section_spec',  '* 6 FETCH (BODY[123.345.87.HEADER.FIELDS (hi there omg)]<5> "OMGHAHAH")\r\n');
+ps('body_section_header_fields',        '* 6 FETCH (BODY[HEADER.FIELDS (hi there omg)]<5> "OMGHAHAH")\r\n');
+ps('body_1part_message_rfc822',
+  '* 5 FETCH (BODY (' ,
+  '"MESSAGE" "RFC822"' ,  // media-message
+  ' ' + body_fields ,  // SP body-fields
+  ' ' + envelope ,
+  ' ' + body ,
+  ' ' + '643' ,
+  '))\r\n'
+);
+ps('body_1part_message',  '* 5 FETCH (BODY ("MESSAGE" "OMG" ' + body_fields + '))\r\n');
+ps('body_1part_audio',    '* 5 FETCH (BODY ("AUDIO" "OMG" ("HI" "THERE" "hi" "there") "FLD-ID" "FLD-DESC" "7BIT" 1234))\r\n');
+ps('body_1part_text',     '* 5 FETCH (BODY ' + body + ')\r\n');
+ps('uid',                 "* 5 FETCH (UID 1234)\r\n");
+ps('rfc822_size',         '* 5 FETCH (RFC822.SIZE 12432)\r\n');
+ps('rfc822_text',         '* 5 FETCH (RFC822.TEXT "kshfda")\r\n');
+ps('rfc822',              "* 5 FETCH (RFC822.HEADER NIL)\r\n");
+ps('internaldate',        '* 5 FETCH (INTERNALDATE "10-Jan-2000 10:11:12 +0500")\r\n');
+
+module.exports = test_utils.tests();
