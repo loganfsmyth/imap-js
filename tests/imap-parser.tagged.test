@@ -1,0 +1,11 @@
+
+var test_utils = require('./test-utils');
+test_utils.type('r');
+var ps = test_utils.parse_success;
+
+
+
+ps('basic_tagged', '1 OK Begin TLS negotiation now.\r\n');
+
+
+module.exports = test_utils.tests();
