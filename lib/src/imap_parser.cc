@@ -22,8 +22,6 @@ enum parser_state {
   s_mailbox,
   s_mailbox_list_flags,
   s_mailbox_list_flags_two,
-  s_mbx_list_flag_start,
-  s_mbx_list_flag,
   s_mailbox_list_str,
   s_nil_start,
   s_nil,
@@ -74,7 +72,6 @@ enum parser_state {
 
   s_section_start,
   s_section,
-  s_section_done,
   s_section_part,
   s_section_msgtext_start,
   s_section_msgtext,
@@ -95,7 +92,6 @@ enum parser_state {
   s_response_tagged_start,
   s_tag_start,
   s_tag,
-  s_response_tagged_mid,
   s_resp_cond_state_start,
   s_resp_cond_state,
   s_check_crlf,
@@ -323,7 +319,7 @@ if (settings->on_done) {                          \
   settings->on_done(parser, type);                \
 }
 
-#define SIGST(state) //printf("State: %c - %d: " #state "\n", c, index)
+#define SIGST(state) printf("State: %c - %d: " #state "\n", c, index)
 
 #define STATE_CASE(st) case st: SIGST(st)
 
@@ -1442,7 +1438,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_response_tagged_start);
         SET_STATE(s_resp_cond_state_start);
         PUSH_STATE(s_sp);
-        // Fall through
+        PUSH_STATE(s_tag_start);
+        p--;
+        break;
 
 
       /**

@@ -104,11 +104,11 @@ public:
       Local<Value> e = Exception::Error(String::NewSymbol("Parse Error"));
 
       e->ToObject()->Set(String::NewSymbol("attemptedBytes"), Integer::New(length));
-      e->ToObject()->Set(String::NewSymbol("bytesParsed"), parsed_amount_val);
-      e->ToObject()->Set(String::NewSymbol("parsedTo"), String::New(buffer_data, parsed_amount));
-      e->ToObject()->Set(String::NewSymbol("failureState"), Integer::New(self->parser.state[self->parser.current_state]));
-      e->ToObject()->Set(String::NewSymbol("lastChar"), String::New((const char*)&(self->parser.last_char), 1));
-      e->ToObject()->Set(String::NewSymbol("ch"), String::New((const char*)&(self->parser.ch), 1));
+      e->ToObject()->Set(String::NewSymbol("bytesParsed"),    parsed_amount_val);
+      e->ToObject()->Set(String::NewSymbol("parsedTo"),       String::New(buffer_data, parsed_amount));
+      e->ToObject()->Set(String::NewSymbol("failureState"),   Integer::New(self->parser.state[self->parser.current_state]));
+      e->ToObject()->Set(String::NewSymbol("lastChar"),       String::New((const char*)&(self->parser.last_char), 1));
+      e->ToObject()->Set(String::NewSymbol("ch"),             String::New((const char*)&(self->parser.ch), 1));
 
       return ThrowException(e);
     }
@@ -117,6 +117,26 @@ public:
     }
   }
 
+  /**
+   * onStart callback to JS
+   */
+  static int on_start(imap_parser* parser, unsigned int type) {
+    ImapParser *self = static_cast<ImapParser*>(parser->data);
+    Local<Value> cb_value = self->handle_->Get(String::NewSymbol("onStart"));
+    if (!cb_value->IsFunction()) return 0;
+    Local<Function> cb = Local<Function>::Cast(cb_value);
+    Local<Value> argv[1] = {
+      Integer::New(type),
+    };
+    Local<Value> ret = cb->Call(self->handle_, 1, argv);
+    if (ret.IsEmpty()) {
+      self->got_exception_ = true;
+      return -1;
+    }
+    else {
+      return 0;
+    }
+  }
 
   /**
    * Callbacks from parser
@@ -169,6 +189,7 @@ extern "C" {
   {
     HandleScope scope;
 
+    settings.on_start   = ImapParser::on_start;
     settings.on_data    = ImapParser::on_data;
     settings.on_done    = ImapParser::on_done;
 
