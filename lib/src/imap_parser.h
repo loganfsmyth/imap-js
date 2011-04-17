@@ -36,6 +36,7 @@ enum data_types {
   IMAP_NUMBERED_STR,
   IMAP_DATETIME,
   IMAP_NIL,
+  IMAP_ATOM,
 };
 
 
