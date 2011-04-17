@@ -351,6 +351,7 @@ void imap_parser_init(imap_parser* parser, enum parser_types type) {
 }
 
 // TODO: Do I need to check that c is never NULL?
+// TODO: Use ascii specifiy data type for static strings for faster encoding
 
 size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, const char* data, size_t len) {
   
