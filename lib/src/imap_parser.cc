@@ -404,7 +404,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         PUSH_STATE(s_sp);
         PUSH_STATE(s_greeting_type_start);
         PUSH_STATE(s_sp);
-
+        CB_ONSTART(IMAP_GREETING_RESPONSE);
         break;
       STATE_CASE(s_greeting_type_start);
         switch (c) {
@@ -436,6 +436,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * FORMAT ( continue-req / response-data / response-tagged ) CRLF
        */
       STATE_CASE(s_response_start);
+
         SET_STATE(s_final_crlf);
         switch (c) {
           case '+':  PUSH_STATE(s_continue_req); break;
@@ -454,6 +455,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (c != '+') ERR();
         SET_STATE(s_continue_resp_or_base64);
         PUSH_STATE(s_sp);
+        CB_ONSTART(IMAP_CONTINUE_RESPONSE);
         break;
       STATE_CASE(s_continue_resp_or_base64);
         if (c == '[') {
@@ -494,6 +496,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        */
       STATE_CASE(s_response_data);
         if (c != '*') ERR();
+        CB_ONSTART(IMAP_UNTAGGED_RESPONSE);
         SET_STATE(s_response_data_type_start);
         PUSH_STATE(s_sp);
         break;
@@ -1451,6 +1454,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         PUSH_STATE(s_sp);
         PUSH_STATE(s_tag_start);
         p--;
+        CB_ONSTART(IMAP_TAGGED_RESPONSE);
         break;
 
 
