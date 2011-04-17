@@ -23,7 +23,7 @@ enum data_types {
   IMAP_LITERAL_SIZE,
   IMAP_ASTRING,
   IMAP_NUMBER,
-  IMAP_RESPONSE,
+  IMAP_COMMAND_RESPONSE,
   IMAP_GREETING_RESPONSE,
   IMAP_TAGGED_RESPONSE,
   IMAP_UNTAGGED_RESPONSE,
@@ -50,6 +50,7 @@ struct imap_parser {
   unsigned int bytes_remaining;
 
   char parsing;
+  char type;
 
   void* data;
 };
