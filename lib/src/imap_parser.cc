@@ -18,6 +18,7 @@ enum parser_state {
   s_text_or_base64_start,
   s_text_or_base64,
   s_mailbox_list_start,
+  s_optional_nznum_start,
   s_optional_nznum,
   s_mailbox,
   s_mailbox_list_flags,
@@ -32,8 +33,10 @@ enum parser_state {
   s_msg_att_start,
   s_msg_att,
   s_msg_att_two,
+  s_msg_att_done,
   s_envelope_start,
   s_envelope,
+  s_envelope_done,
   s_datetime_start,
   s_datetime,
   s_nstring,
@@ -43,6 +46,7 @@ enum parser_state {
 
   s_addr_nil_start,
   s_address,
+  s_address_done,
 
   s_body_mpart_start,
   s_body_mpart_next,
@@ -50,6 +54,7 @@ enum parser_state {
   s_body_ext_mpart,
   s_body_fld_dsp_start,
   s_body_fld_dsp,
+  s_body_fld_dsp_done,
   s_body_fld_lang,
   s_body_fld_loc,
   s_body_extension,
@@ -57,9 +62,11 @@ enum parser_state {
   s_body_ext_mpart_opt_fld_dsp,
   s_body_ext_mpart_opt_fld_lang,
   s_body_ext_mpart_opt_fld_loc,
+  s_body_ext_mpart_opt_body_ext_start,
   s_body_ext_mpart_opt_body_ext,
 
   s_body_start,
+  s_body_done,
   s_body_fields,
   s_body_1part_start,
   s_body_1part_type,
@@ -71,6 +78,7 @@ enum parser_state {
   s_body_fld_param,
 
   s_section_start,
+  s_section_done,
   s_section,
   s_section_part,
   s_section_msgtext_start,
@@ -99,6 +107,7 @@ enum parser_state {
   s_final_crlf,
   s_final_lf,
   s_resp_text,
+  s_resp_text_done,
   s_resp_text_code_start,
   s_resp_text_code,
   s_resp_text_code_atom,
@@ -604,7 +613,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
                SET_STATE(s_mailbox_list_start);
               break;
             case STR_SEARCH:
-              SET_STATE(s_optional_nznum);
+              SET_STATE(s_optional_nznum_start);
               p--;
               break;
             case STR_STATUS:
@@ -696,7 +705,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         index = 0;
         str_start = p;
         cur_string = STR_UNKNOWN;
-        SET_STATE(s_msg_att_two);
+        CB_ONSTART(IMAP_MSG_ATT);
+        SET_STATE(s_msg_att_done);
+        PUSH_STATE(s_msg_att_two);
       STATE_CASE(s_msg_att_two);
         if (index == 0) {
           switch (c) {
@@ -785,6 +796,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
 
         index++;
         break;
+      STATE_CASE(s_msg_att_done);
+        CB_ONDONE(IMAP_MSG_ATT);
+        POP_STATE();
+        p--;
+        break;
 
 
       /**
@@ -813,7 +829,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        */
       STATE_CASE(s_section_start);
         if (c != '[') ERR();
-        SET_STATE(s_section);
+        SET_STATE(s_section_done);
+        PUSH_STATE(s_section);
+        CB_ONSTART(IMAP_LIST);
         break;
       STATE_CASE(s_section);
         if (c == ']') {
@@ -830,7 +848,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           PUSH_STATE(s_section_msgtext_start);
           p--;
         }
-
+        break;
+      STATE_CASE(s_section_done);
+        CB_ONDONE(IMAP_LIST);
+        p--;
+        POP_STATE();
         break;
 
 
@@ -844,7 +866,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           POP_STATE();
         }
         else {
-          SET_STATE(s_section_text);
+          SET_STATE(s_section_text_start);
         }
         break;
 
@@ -882,6 +904,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       /**
        * FUNCTION section-text
        * FORMAT   section-msgtext / "MIME"
+       *   Only call from section-part due to IMAP_LIST
        */
       STATE_CASE(s_section_text_start);
         index = 0;
@@ -980,6 +1003,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * FORMAT   *(SP nz-number)
        *   Used in mailbox-data
        */
+      STATE_CASE(s_optional_nznum_start);
+        CB_ONSTART(IMAP_LIST);
       STATE_CASE(s_optional_nznum);
         if (c == ' ') {
           SET_STATE(s_optional_nznum);
@@ -988,6 +1013,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else {
           POP_STATE();
           p--;
+          CB_ONDONE(IMAP_LIST);
         }
         break;
 
@@ -1000,9 +1026,10 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_envelope_start);
         if (c != '(') ERR();
         SET_STATE(s_envelope);
+        CB_ONSTART(IMAP_ENVELOPE);
         break;
       STATE_CASE(s_envelope);
-        SET_STATE(s_closeparen);
+        SET_STATE(s_envelope_done);
         PUSH_STATE(s_env_message_id);
         PUSH_STATE(s_sp);
         PUSH_STATE(s_env_in_reply_to);
@@ -1024,6 +1051,13 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         PUSH_STATE(s_env_date);
         p--;
         break;
+      STATE_CASE(s_envelope_done);
+        if (c != ')') ERR();
+        CB_ONDONE(IMAP_ENVELOPE);
+        POP_STATE();
+        break;
+
+
 
 
       // Declare addr-nil aliases
@@ -1048,6 +1082,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else {
           SET_STATE(s_closeparen);
           PUSH_STATE(s_addr_nil);
+          CB_ONSTART(IMAP_LIST);
         }
         break;
       STATE_CASE(s_addr_nil);
@@ -1057,6 +1092,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else {
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         p--;
         break;
@@ -1068,7 +1104,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        */
       STATE_CASE(s_address);
         if (c != '(') ERR();
-        SET_STATE(s_closeparen);
+        CB_ONSTART(IMAP_ADDRESS);
+        SET_STATE(s_address_done);
         PUSH_STATE(s_addr_host);
         PUSH_STATE(s_sp);
         PUSH_STATE(s_addr_mailbox);
@@ -1077,6 +1114,12 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         PUSH_STATE(s_sp);
         PUSH_STATE(s_addr_name);
         break;
+      STATE_CASE(s_address_done);
+        if (c != ')') ERR();
+        CB_ONDONE(IMAP_ADDRESS);
+        POP_STATE();
+        break;
+
 
 
 
@@ -1086,8 +1129,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        */
       STATE_CASE(s_body_start);
         if (c != '(') ERR();
-        SET_STATE(s_closeparen);
+        SET_STATE(s_body_done);
         PUSH_STATE(s_body);
+        CB_ONSTART(IMAP_BODY);
         break;
       STATE_CASE(s_body);
         if (c == '(') {
@@ -1098,7 +1142,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         p--;
         break;
-
+      STATE_CASE(s_body_done);
+        if (c != ')') ERR();
+        POP_STATE();
+        CB_ONDONE(IMAP_BODY);
+        break;
 
 
 
@@ -1229,6 +1277,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_body_mpart_start);
         SET_STATE(s_body_mpart_next);
         PUSH_STATE(s_body_start);
+        CB_ONSTART(IMAP_LIST);
         p--;
         break;
       STATE_CASE(s_body_mpart_next);
@@ -1240,6 +1289,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else if (c == ' ') {
           SET_STATE(s_body_mpart_done);
           PUSH_STATE(s_media_subtype);
+          CB_ONDONE(IMAP_LIST);
         }
         else {
           ERR();
@@ -1272,7 +1322,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else {
           SET_STATE(s_body_ext_mpart_opt_fld_lang);
-          PUSH_STATE(s_body_fld_dsp);
+          PUSH_STATE(s_body_fld_dsp_start);
         }
         break;
       STATE_CASE(s_body_ext_mpart_opt_fld_lang);
@@ -1291,14 +1341,19 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           POP_STATE();
         }
         else {
-          SET_STATE(s_body_ext_mpart_opt_body_ext);
+          SET_STATE(s_body_ext_mpart_opt_body_ext_start);
           PUSH_STATE(s_body_fld_loc);
         }
         break;
+
+      STATE_CASE(s_body_ext_mpart_opt_body_ext_start);
+        SET_STATE(s_body_ext_mpart_opt_body_ext);
+        CB_ONSTART(IMAP_LIST);
       STATE_CASE(s_body_ext_mpart_opt_body_ext);
         if (c != ' ') {
           p--;
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         else {
           SET_STATE(s_body_ext_mpart_opt_body_ext);
@@ -1318,15 +1373,19 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
         }
         else {
-          SET_STATE(s_body_fld_dsp);
+          SET_STATE(s_body_fld_dsp_done);
+          PUSH_STATE(s_body_fld_param_start);
+          PUSH_STATE(s_sp);
+          PUSH_STATE(s_string);
+          CB_ONSTART(IMAP_LIST);
         }
         break;
-      STATE_CASE(s_body_fld_dsp);
-        SET_STATE(s_closeparen);
-        PUSH_STATE(s_body_fld_param_start);
-        PUSH_STATE(s_sp);
-        PUSH_STATE(s_string);
+      STATE_CASE(s_body_fld_dsp_done);
+        if (c != ')') ERR();
+        POP_STATE();
+        CB_ONDONE(IMAP_LIST);
         break;
+
 
 
       /**
@@ -1413,10 +1472,12 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         SET_STATE(s_mailbox_list_str);
         PUSH_STATE(s_sp);
         PUSH_STATE(s_mailbox_list_flags);
+        CB_ONSTART(IMAP_LIST);
         break;
       STATE_CASE(s_mailbox_list_flags);
         if (c == ')') {
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         else {
           p--;
@@ -1432,6 +1493,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else {
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
           p--;
         }
         break;
@@ -1520,7 +1582,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * FORMAT   ["[" resp-text-code "]" SP] text
        */
       STATE_CASE(s_resp_text);
-        SET_STATE(s_text_start);
+        SET_STATE(s_resp_text_done);
+        PUSH_STATE(s_text_start);
+        CB_ONSTART(IMAP_RESP_TEXT);
         if (c == '[') {
           PUSH_STATE(s_sp);
           PUSH_STATE(s_closebracket);
@@ -1529,6 +1593,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else {
           p--;
         }
+        break;
+      STATE_CASE(s_resp_text_done);
+        CB_ONDONE(IMAP_RESP_TEXT);
+        POP_STATE();
+        p--;
         break;
 
 
@@ -1664,6 +1733,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_capability_data_arg_start);
         SET_STATE(s_capability_data_arg);
         PUSH_STATE(s_atom_start); // TODO alias
+        CB_ONSTART(IMAP_LIST);
         p--;
         break;
       STATE_CASE(s_capability_data_arg);
@@ -1674,6 +1744,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else {
           p--;
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         break;
 
@@ -1685,10 +1756,12 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_permanentflags_args_start);
         if (c != '(') ERR();
         SET_STATE(s_permanentflags_args);
+        CB_ONSTART(IMAP_LIST);
         break;
       STATE_CASE(s_permanentflags_args);
         if (c == ')') {
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         else {
           p--;
@@ -1701,12 +1774,14 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (c != ' ') {
           POP_STATE();
           p--;
+          CB_ONDONE(IMAP_LIST);
         }
         else {
           SET_STATE(s_permanentflags_args_done);
           PUSH_STATE(s_flag_perm_start);
         }
         break;
+
 
       /**
        * FUNCTION flag-perm
@@ -1828,10 +1903,12 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_mailbox_status_att_list_start);
         if (c != '(') ERR();
         SET_STATE(s_mailbox_status_att_list_opt);
+        CB_ONSTART(IMAP_LIST);
         break;
       STATE_CASE(s_mailbox_status_att_list_opt);
         if (c == ')') {
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         else {
           p--;
@@ -1851,6 +1928,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         }
         else {
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
           p--;
         }
         break;
@@ -1895,6 +1973,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         tmp = PEEK_STATE(); // assume that the list state was pushed on just before this.
         PUSH_STATE(s_paren_sp_list_done);
         PUSH_STATE(tmp);
+        CB_ONSTART(IMAP_LIST);
         break;
       STATE_CASE(s_paren_sp_list_done);
         if (c == ' ') {
@@ -1906,6 +1985,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else if (c == ')') {
           POP_STATE();
           POP_STATE();
+          CB_ONDONE(IMAP_LIST);
         }
         else ERR();
         break;
