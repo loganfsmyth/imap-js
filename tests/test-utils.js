@@ -8,12 +8,16 @@ var type = ImapParser.RESPONSE;
 var tests = {};
 
 var runner = function(args) {
+  var done = false;
+  p.onGreeting = p.onUntagged = p.onTagged = p.onContinuation = function() {
+    done = true;
+  }
   return function() {
     for(var i = 0, len = args.length; i < len; i++) {
       var b = new Buffer(args[i]);
       p.execute( b );
     }
-    if (!p.isDone()) {
+    if (!done) {
       throw new Error("Command Incomplete");
     }
   }
