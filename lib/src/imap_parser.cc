@@ -313,7 +313,7 @@ do {    \
   char* to = strndup(start, (end-start)); \
   printf(str " => %s\n", to);   \
   free(to);     \
-} while(0)      
+} while(0)
 
 #define CB_ONDATA(end, type)                                      \
 if (str_start && settings->on_data) {                             \
@@ -363,7 +363,7 @@ void imap_parser_init(imap_parser* parser, enum parser_types type) {
 // TODO: Use ascii specifiy data type for static strings for faster encoding
 
 size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, const char* data, size_t len) {
-  
+
   unsigned int index = parser->index;
   enum string_ref cur_string = (enum string_ref)parser->cur_string;
   char last_char = parser->last_char;
@@ -410,7 +410,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        */
       STATE_CASE(s_greeting_start);
         if (c != '*') ERR();
-        SET_STATE(s_final_crlf);
+        SET_STATE(s_response_start);
+        PUSH_STATE(s_final_crlf);
         PUSH_STATE(s_resp_text);
         PUSH_STATE(s_sp);
         PUSH_STATE(s_greeting_type_start);
@@ -448,8 +449,8 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * FORMAT ( continue-req / response-data / response-tagged ) CRLF
        */
       STATE_CASE(s_response_start);
-
-        SET_STATE(s_final_crlf);
+        SET_STATE(s_response_start);
+        PUSH_STATE(s_final_crlf);
         switch (c) {
           case '+':  PUSH_STATE(s_continue_req); break;
           case '*':  PUSH_STATE(s_response_data); break;
