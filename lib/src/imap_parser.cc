@@ -111,6 +111,7 @@ enum parser_state {
   s_resp_text_done,
   s_resp_text_code_start,
   s_resp_text_code,
+  s_resp_text_code_done,
   s_resp_text_code_atom,
   s_resp_text_code_atom_args,
   s_resp_text_code_atom_args_start,
@@ -1636,7 +1637,9 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
       STATE_CASE(s_resp_text_code_start);
         index = 0;
         str_start = p;
-        SET_STATE(s_resp_text_code);
+        CB_ONSTART(IMAP_LIST);
+        SET_STATE(s_resp_text_code_done);
+        PUSH_STATE(s_resp_text_code);
         // Fall through
       STATE_CASE(s_resp_text_code);
         switch (index) {
@@ -1729,6 +1732,11 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
           SET_STATE(s_resp_text_code_atom_test);
         }
+        break;
+      STATE_CASE(s_resp_text_code_done);
+        p--;
+        POP_STATE();
+        CB_ONDONE(IMAP_LIST);
         break;
 
 
