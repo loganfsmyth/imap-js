@@ -1831,6 +1831,7 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         SET_STATE(s_resp_text_code_atom);
       STATE_CASE(s_resp_text_code_atom);
         if (!IS_ATOM_CHAR(c)) {
+          CB_ONDATA(p, IMAP_ATOM);
           if (c != ' ') {
             p--;
             POP_STATE();
