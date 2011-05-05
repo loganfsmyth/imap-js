@@ -1,0 +1,21 @@
+
+var test_utils = require('./test-utils');
+test_utils.type('r');
+var ps = test_utils.parse_success;
+
+ps('highestmodseq', '* OK [HIGHESTMODSEQ 1] Highest\r\n');
+
+ps('search', '* SEARCH\r\n');
+
+// Test lower case 'text' keyword
+ps('fetch', '* 1 FETCH (BODY ("text" "plain" ("charset" "us-ascii") NIL NIL "7bit" 0 0))\r\n');
+
+ps('gmail_error', '* FLAGS (\\Answered \\Flagged \\Draft \\Deleted \\Seen)\r\n' +
+'* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Draft \\Deleted \\Seen \\*)]\r\n' +
+'* OK [UIDVALIDITY 2]\r\n' +
+'* 103 EXISTS\r\n' +
+'* 0 RECENT\r\n' +
+'* OK [UIDNEXT 43995]\r\n' +
+'4 OK [READ-WRITE] INBOX selected. (Success)\r\n');
+
+module.exports = test_utils.tests();

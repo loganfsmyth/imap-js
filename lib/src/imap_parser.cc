@@ -595,32 +595,37 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         if (cur_string == STR_UNKNOWN) {
           // changing state to numbered
         }
-        else if (str[index] == '\0' && c == ' ') {
+        else if (str[index] == '\0') {
           CB_ONDATA(p, IMAP_TEXT);
           switch (cur_string) {
             case STR_OK:
             case STR_NO:
             case STR_BAD:
             case STR_BYE:
+              if (c != ' ') ERR();
               SET_STATE(s_resp_text);
               break;
             case STR_CAPABILITY:
+              if (c != ' ') ERR();
               SET_STATE(s_capability_data_arg_start);
               break;
             case STR_FLAGS:
                // TODO Remember to filter out '\*' from list of these flags
+              if (c != ' ') ERR();
               SET_STATE(s_permanentflags_args_start);
               break;
             case STR_LIST:
             case STR_LSUB:
-               SET_STATE(s_mailbox_list_start);
+              if (c != ' ') ERR();
+              SET_STATE(s_mailbox_list_start);
               break;
             case STR_SEARCH:
               SET_STATE(s_optional_nznum_start);
               p--;
               break;
             case STR_STATUS:
-               // check for ( mailbox sp mailbox_status_att_list )
+              // check for ( mailbox sp mailbox_status_att_list )
+              if (c != ' ') ERR();
               SET_STATE(s_mailbox_status_att_list_start);
               PUSH_STATE(s_sp);
               PUSH_STATE(s_mailbox);
