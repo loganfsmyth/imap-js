@@ -107,6 +107,7 @@ enum parser_state {
   s_final_crlf,
   s_final_lf,
   s_resp_text,
+  s_resp_text_opt_text,
   s_resp_text_done,
   s_resp_text_code_start,
   s_resp_text_code,
@@ -1579,21 +1580,34 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         break;
 
 
+
       /**
        * FUNCTION resp-text
-       * FORMAT   ["[" resp-text-code "]" SP] text
+       * FORMAT   ["[" resp-text-code "]" SP ] text / "[" resp-text-code "]"
+       *
+       * Note:  The second format is not standard, but is output by Gmail
+       *        so I am including it
        */
       STATE_CASE(s_resp_text);
         SET_STATE(s_resp_text_done);
-        PUSH_STATE(s_text_start);
         CB_ONSTART(IMAP_RESP_TEXT);
         if (c == '[') {
-          PUSH_STATE(s_sp);
+          PUSH_STATE(s_resp_text_opt_text);
           PUSH_STATE(s_closebracket);
           PUSH_STATE(s_resp_text_code_start);
         }
         else {
+          PUSH_STATE(s_text_start);
           p--;
+        }
+        break;
+      STATE_CASE(s_resp_text_opt_text);
+        if (c == ' ') {
+          SET_STATE(s_text_start);
+        }
+        else {
+          p--;
+          POP_STATE();
         }
         break;
       STATE_CASE(s_resp_text_done);
