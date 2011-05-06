@@ -51,6 +51,8 @@ enum parser_state {
   s_body_mpart_start,
   s_body_mpart_next,
   s_body_mpart_done,
+  s_body_ext_1part,
+  s_body_ext_1part_opt,
   s_body_ext_mpart,
   s_body_fld_dsp_start,
   s_body_fld_dsp_done,
@@ -1169,9 +1171,10 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
        * [SP body-ext-1part] // TODO
        */
       STATE_CASE(s_body_1part_start);
+        SET_STATE(s_body_ext_1part_opt);
         if (c == '{') {
           // only first option has string
-          SET_STATE(s_body_fields);
+          PUSH_STATE(s_body_fields);
           PUSH_STATE(s_sp);
           PUSH_STATE(s_string);
           PUSH_STATE(s_sp);
@@ -1179,10 +1182,19 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
           p--;
         }
         else if (c == '"') {
-          SET_STATE(s_body_1part_message_text_or_string);
+          PUSH_STATE(s_body_1part_message_text_or_string);
         }
         else {
           ERR();
+        }
+        break;
+      STATE_CASE(s_body_ext_1part_opt);
+        if (c != ' ') {
+          p--;
+          POP_STATE();
+        }
+        else {
+          SET_STATE(s_body_ext_1part);
         }
         break;
 
@@ -1312,6 +1324,17 @@ size_t imap_parser_execute(imap_parser* parser, imap_parser_settings* settings, 
         else {
           SET_STATE(s_body_ext_mpart);
         }
+        break;
+
+
+      /**
+       * FUNCTION body-ext-1part
+       * FORMAT   body-fld-md5 [SP body-fld-dsp [SP body-fld-lang [SP body-fld-loc *(SP body-extension)]]]
+       */
+      STATE_CASE(s_body_ext_1part);
+        p--;
+        SET_STATE(s_body_ext_mpart_opt_fld_dsp);
+        PUSH_STATE(s_body_fld_md5);
         break;
 
 
