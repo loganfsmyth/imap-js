@@ -11,36 +11,6 @@ STATE_AUTH    = 0x2
 STATE_SELECT  = 0x4
 STATE_LOGOUT  = 0x8
 
-tagChars = (String.fromCharCode i for i in [0x1..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+'] and (String.fromCharCode(i) in ['a'..'z'] or String.fromCharCode(i) in ['A'..'Z']))
-
-getCommandTag = (count) ->
-  len = tagChars.length
-  tag = ''
-  while count >= 1
-    i = Math.floor count%len
-    count /= len
-    tag = tagChars[i] + tag
-  return tag
-
-
-pipe = (pair, socket) ->
-  pair.encrypted.pipe socket
-  socket.pipe pair.encrypted
-  pair.fd = socket.fd
-  cleartext = pair.cleartext
-  cleartext.socket = socket
-  cleartext.encrypted = pair.encrypted
-  cleartext.authorized = false
-
-  onerror = (e) -> if cleartext._controlRelease then cleartext.emit 'error', e
-  onclose = ->
-    socket.removeListener 'error', onerror
-    socket.removeListener 'close', onclose
-
-  socket.on 'error', onerror
-  socket.on 'close', onclose
-
-  return cleartext
 
 defineCommand = (state, {command: command_cb, response: response_cb, continue: continue_cb}) ->
   states = [STATE_ERROR, STATE_LOGOUT, STATE_UNAUTH, STATE_AUTH, STATE_SELECT]
@@ -50,19 +20,19 @@ defineCommand = (state, {command: command_cb, response: response_cb, continue: c
       cb.call @, new Error "This command is not available in the #{stateName} state."
       return
 
-    command =
-      command: if typeof command_cb == 'function' then command_cb.apply(@, args) else command_cb,
-      response: (resp_args...)->
-        if response_cb
-          response_cb.call @, resp_args..., cb
-        else
-          cb.apply(null, resp_args)
-
+    tag = getCommandTag @tag_counter++
+    @responseCallbacks[tag] = if not response_cb then cb else (resp_args...)->
+      response_cb.call @, resp_args..., cb
 
     if continue_cb
-      command.continuation = (cont_args...) ->  continue_cb.call @, cont_args..., args...
+      @continuationQueue.push (cont_args...) ->
+        continue_cb.call @, cont_args..., args...
 
-    @enqueueCommand command
+    command = if typeof command_cb == 'function' then command_cb.apply(@, args) else command_cb
+    @con.write tag + ' ' + command + '\r\n'
+
+    console.log command
+
 
 
 ImapClient = exports.ImapClient = (host, port, secure, cb) ->
@@ -150,23 +120,17 @@ ImapClient.prototype._processContinuation = (response) ->
 
 
 ImapClient.prototype._processTagged = (response) ->
+  console.log(response)
+  console.log @responseCallbacks
   @responseCallbacks[response.tag]?.call @, (if response.type != 'OK' then response.type else null), response.text
   delete @responseCallbacks[response.tag]
   @untagged = {}
 
-ImapClient.prototype.enqueueCommand = (command) ->
-  tag = getCommandTag @tag_counter++
-  if command.continuation
-    @continuationQueue.push command.continuation
-  @responseCallbacks[tag] = command.response
-
-  this.con.write tag + ' ' + command.command + '\r\n'
-  console.log tag + ' ' + command.command
 
 
-"""
+###
 Client Commands - Any State
-"""
+###
 ImapClient.prototype.capability = defineCommand STATE_UNAUTH,
   command: 'CAPABILITY',
 
@@ -181,9 +145,9 @@ ImapClient.prototype.logout = defineCommand STATE_UNAUTH,
 
 
 
-"""
+###
 Client Commands - Not Authenticated
-"""
+###
 ImapClient.prototype.starttls = defineCommand STATE_UNAUTH,
   command: 'STARTTLS'
   response: (err, resp, cb) ->
@@ -213,9 +177,9 @@ ImapClient.prototype.login = defineCommand STATE_UNAUTH,
 
 
 
-"""
+###
 Client Commands - Authenticated
-"""
+###
 ImapClient.prototype.select = defineCommand STATE_AUTH,
   command: (mailbox) -> "SELECT #{mailbox}",
   response: (err, resp, cb) ->
@@ -256,9 +220,9 @@ ImapClient.prototype.append = defineCommand STATE_AUTH,
 
 
 
-"""
+###
 Client Commands Selected
-"""
+###
 ImapClient.prototype.check = defineCommand STATE_AUTH,
   command: "CHECK",
 
@@ -283,4 +247,37 @@ ImapClient.prototype.copy = defineCommand STATE_AUTH,
 ImapClient.prototype.uid = defineCommand STATE_AUTH,
   command: (command, args...) -> "UID #{command} #{args.join(' ')}",
 
+
+
+# Make a list of all CHARs except atom-specials and '+'
+tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
+
+getCommandTag = (count) ->
+  len = tagChars.length
+  tag = ''
+  while count >= 1
+    i = Math.floor count%len
+    count /= len
+    tag = tagChars[i] + tag
+  return tag
+
+
+pipe = (pair, socket) ->
+  pair.encrypted.pipe socket
+  socket.pipe pair.encrypted
+  pair.fd = socket.fd
+  cleartext = pair.cleartext
+  cleartext.socket = socket
+  cleartext.encrypted = pair.encrypted
+  cleartext.authorized = false
+
+  onerror = (e) -> if cleartext._controlRelease then cleartext.emit 'error', e
+  onclose = ->
+    socket.removeListener 'error', onerror
+    socket.removeListener 'close', onclose
+
+  socket.on 'error', onerror
+  socket.on 'close', onclose
+
+  return cleartext
 
