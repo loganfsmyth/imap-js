@@ -1,7 +1,7 @@
 
-ipn = require './imap_parser_native'
-util = require 'util'
-Iconv = require('iconv').Iconv
+ipn     = require './imap_parser_native'
+util    = require 'util'
+{Iconv} = require 'iconv'
 
 utf7to8 = new Iconv 'UTF-7', 'UTF-8'
 

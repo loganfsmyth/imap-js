@@ -1,9 +1,9 @@
 
-ImapParser    = require('./imap-parser').ImapParser
-EventEmitter  = require('events').EventEmitter
-util = require 'util'
-tls = require 'tls'
-net = require 'net'
+{ImapParser}    = require './imap-parser'
+{EventEmitter}  = require 'events'
+util            = require 'util'
+tls             = require 'tls'
+net             = require 'net'
 
 STATE_ERROR   = 0x0
 STATE_UNAUTH  = 0x1
