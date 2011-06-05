@@ -35,7 +35,7 @@ defineCommand = ({state: state, command: command_cb, response: response_cb, cont
 
 
 
-exports.ImapClient = class ImapClient
+ImapClient = class exports.ImapClient
   constructor: (host, port, secure, cb) ->
     EventEmitter.call(this)
 
