@@ -35,9 +35,9 @@ defineCommand = ({state: state, command: command_cb, response: response_cb, cont
 
 
 
-ImapClient = class exports.ImapClient
+exports.ImapClient = class ImapClient extends EventEmitter
   constructor: (host, port, secure, cb) ->
-    EventEmitter.call(this)
+    super()
 
     @tag_counter = 1
     @responseCallbacks = {}
@@ -77,9 +77,6 @@ ImapClient = class exports.ImapClient
         @starttls cb
       else
         process.nextTick cb
-
-
-  util.inherits ImapClient, EventEmitter
 
   STATE_ERROR:  STATE_ERROR,
   STATE_UNAUTH: STATE_UNAUTH,

@@ -6,7 +6,7 @@ util    = require 'util'
 utf7to8 = new Iconv 'UTF-7', 'UTF-8'
 
 
-ImapParser = class exports.ImapParser
+exports.ImapParser = class ImapParser
   constructor: (type) ->
     @parser = new (ipn.ImapParser) type
     @reinitialize(type)
@@ -14,6 +14,10 @@ ImapParser = class exports.ImapParser
     @parser.onData = (b, start, len, type) => @onParserData b, start, len, type
     @parser.onStart = (type) => @onParserStart type
     @parser.onDone = (type) => @onParserDone type
+
+
+  for i in ['GREETING', 'RESPONSE', 'COMMAND']
+    @[i] = ipn['PARSER_' + i]
 
   reinitialize: (type) ->
     @buffers = []
@@ -49,12 +53,11 @@ ImapParser = class exports.ImapParser
     if type in [ ipn.IMAP_COMMAND_RESPONSE, ipn.IMAP_GREETING_RESPONSE, ipn.IMAP_UNTAGGED_RESPONSE, ipn.IMAP_CONTINUE_RESPONSE, ipn.IMAP_TAGGED_RESPONSE, ipn.IMAP_LIST, ipn.IMAP_RESP_TEXT, ipn.IMAP_MSG_ATT, ipn.IMAP_BODY, ipn.IMAP_ENVELOPE, ipn.IMAP_ADDRESS, ipn.IMAP_SECTION, ipn.IMAP_KEYVALUE]
       @values.push []
 
-
   onParserDone: (type) ->
     v = @values.pop()
     o = []
     switch type
-#    when ipn.IMAP_COMMAND_RESPONSE
+#      when ipn.IMAP_COMMAND_RESPONSE
       when ipn.IMAP_GREETING_RESPONSE
         @onGreeting? @zip(['type', 'text'], v)
       when ipn.IMAP_UNTAGGED_RESPONSE
@@ -64,8 +67,8 @@ ImapParser = class exports.ImapParser
           when 'CAPABILITY', 'FLAGS'
             ['type', 'value']
           when 'LIST', 'LSUB'
-            ['type', 'list-flags', 'delim', 'mailbox']
             v[3] = @_modifiedUtf7ToUtf8 v[3]
+            ['type', 'list-flags', 'delim', 'mailbox']
           when 'SEARCH'
             if v.length > 1 then ['type', 'value'] else ['type']
           when 'STATUS'
@@ -202,8 +205,4 @@ ImapParser = class exports.ImapParser
         throw new Error "Unexpected datatype encountered: #{type}"
 
     @values[@values.length-1].push value
-
-
-for i in ['GREETING', 'RESPONSE', 'COMMAND']
-  ImapParser[i] = ipn['PARSER_' + i]
 
