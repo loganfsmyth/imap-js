@@ -1,7 +1,6 @@
 class ImapMailbox
-  constuctor: (@client, @name) ->
+  constructor: (@client, @name) ->
     @deleted = false
-    a = 2
 
   ensureSelected: ->
     @client.select @name if @client.selected() != @name
