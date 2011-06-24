@@ -11,6 +11,13 @@ STATE_AUTH    = 0x2
 STATE_SELECT  = 0x4
 STATE_LOGOUT  = 0x8
 
+stateStr = (state) ->
+  switch state
+    when STATE_ERROR  then "Error"
+    when STATE_UNAUTH then "Unauth"
+    when STATE_AUTH   then "Auth"
+    when STATE_SELECT then "Select"
+    when STATE_LOGOUT then "Logout"
 
 defineCommand = ({state: state, command: command_cb, response: response_cb, continue: continue_cb}) ->
   states = [STATE_ERROR, STATE_LOGOUT, STATE_UNAUTH, STATE_AUTH, STATE_SELECT]
@@ -29,15 +36,23 @@ defineCommand = ({state: state, command: command_cb, response: response_cb, cont
         continue_cb.call @, cont_args..., args...
 
     command = if typeof command_cb == 'function' then command_cb.apply(@, args) else command_cb
-    @con.write tag + ' ' + command + '\r\n'
+    @stream.write tag + ' ' + command + '\r\n'
 
     console.log command
 
 
 
 exports.ImapClient = class ImapClient extends EventEmitter
-  constructor: (host, port, secure, cb) ->
+  constructor: (host, port, secure, options, cb) ->
     super()
+
+    if typeof options == 'function'
+      cb = options
+      options = {}
+
+    timeout = options.timeout || 500
+
+    greeted = false
 
     @tag_counter = 1
     @responseCallbacks = {}
@@ -45,36 +60,50 @@ exports.ImapClient = class ImapClient extends EventEmitter
     @untagged = {}
     @state = STATE_ERROR
 
-    @parser = new ImapParser ImapParser.GREETING
+    # For SSL immediately open an SSL/TLS connection
+    if secure == 'ssl'
+      @stream = tls.connect port, host, () =>
+        cb true if not @stream.authorized
+      @socket = @stream.socket
 
+    # For TLS and unsecure, we start with a standard connection
+    else
+      @stream = @socket = net.createConnection port, host
+
+
+    # When we receive data, pass it to the parser
+    @stream.on 'data', (d) => @_onData d
+
+    # On timeout, it it happens before greeting
+    # Then initialization failed so run cb w/ error
+    @stream.setTimeout timeout, =>
+      cb true if not greeted
+      @emit 'timeout'
+
+    # Pass connect to our listeners
+    @socket.setKeepAlive true  # @TODO Needed?
+    @socket.on 'connect', => @emit 'connect'
+
+
+    @parser = new ImapParser ImapParser.GREETING
     @parser.onContinuation  = (resp) => @_processContinuation resp
     @parser.onUntagged      = (resp) => @_processUntagged resp
     @parser.onTagged        = (resp) => @_processTagged resp
-
-    if secure == 'ssl'
-      @con = tls.connect port, host
-    else
-      @con = net.createConnection port, host
-      @con.setKeepAlive true  # @TODO Needed?
-
-    @con.on 'connect', => @emit 'connect'
-    @con.on 'data', (d) =>
-      console.log 'Parsing --' + d.toString('utf8') + '--'
-      try
-        @parser.execute d
-      catch e
-        console.log e
-
-
     @parser.onGreeting = (resp) =>
+
+      greeted = true # stops timeout from triggering cb
+
       @state = switch resp.type
         when 'BYE'      then STATE_LOGOUT
         when 'PREAUTH'  then STATE_AUTH
         else STATE_UNAUTH
       @_processUntagged resp
 
+      # For TLS, we need to run STARTTLS before before proceeding
       if secure == 'tls'
         @starttls cb
+
+      # If we got a greeting on a non-tls connection, it's all working
       else
         process.nextTick cb
 
@@ -83,6 +112,13 @@ exports.ImapClient = class ImapClient extends EventEmitter
   STATE_AUTH:   STATE_AUTH,
   STATE_SELECT: STATE_SELECT,
   STATE_LOGOUT: STATE_LOGOUT,
+
+  _onData: (d) ->
+    console.log 'Parsing --' + d.toString('utf8') + '--'
+    try
+      @parser.execute d
+    catch e
+      console.log e
 
   _processUntagged: (response) ->
     switch response.type
@@ -108,7 +144,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
     handler = @continuationQueue.shift()
     handler response, (result) =>
       if result
-        @con.write result + '\r\n'
+        @stream.write result + '\r\n'
         @continuationQueue.unshift handler
 
 
@@ -150,10 +186,13 @@ exports.ImapClient = class ImapClient extends EventEmitter
       if err then return cb err, resp
 
       pair = new tls.createSecurePair()
-      listeners = @con.listeners 'data'
-      @con.removeAllListeners('data')
-      @con = pipe(pair, @con)
-      (@con.on 'data', f for f in listeners)
+
+      listeners = @stream.listeners 'data'
+      @stream.removeAllListeners('data')
+      @stream = pipe pair, @stream
+      (@stream.on 'data', f for f in listeners)
+
+      @socket = @stream.socket
 
       pair.on 'secure', -> cb err, resp
 
