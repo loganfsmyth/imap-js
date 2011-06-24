@@ -1,6 +1,6 @@
 
 var testCase = require('nodeunit').testCase;
-var ImapParser = require('../lib/imap-parser').ImapParser;
+var ImapParser = require('../../lib/imap-parser').ImapParser;
 var p = new ImapParser(ImapParser.RESPONSE);
 var mod = {};
 var type = ImapParser.RESPONSE;

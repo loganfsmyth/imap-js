@@ -1,0 +1,38 @@
+
+var test_utils = require('./test-utils');
+test_utils.type('r');
+var ps = test_utils.parse_success;
+var pf = test_utils.parse_failure;
+
+ps('cap', "a001 OK [CAPABILITY IMAP4rev1 LITERAL+ SASL-IR LOGIN-REFERRALS ID ENABLE STARTTLS LOGINDISABLED] Dovecot ready.\r\n");
+ps('badcharset', "a001 OK [BADCHARSET (OMG WHAT HAHAH)] OH YEAH\r\n");
+ps('badcharset_literal', "a001 OK [BADCHARSET ({5}\r\nABCDE \"BADSET\")] OH YEAH\r\n");
+
+ps('perm',"a001 OK [PERMANENTFLAGS (\\Answered \\* FLAG)] OH YEAH\r\n");
+ps('perm2', "a001 OK [PERMANENTFLAGS ()] OH YEAH\r\n");
+ps('unseen', "a001 OK [UNSEEN 10] OH YEAH\r\n");
+ps('bad', 'a001 BAD [READ-ONLY] Failure\r\n');
+ps('ok', 'a001 OK Failure\r\n');
+ps('no', 'a001 NO [ALERT] Failure\r\n');
+ps('correct', 'a001 BAD misc test\r\n');
+     
+     
+ps('no_code', "+ some random text hagahaha\r\n");
+ps('code_alert', "+ [ALERT] some random text hagahaha\r\n");
+ps('code_badcharset', "+ [BADCHARSET (jhdsfdgsfg)] some random text hagahaha\r\n");
+ps('code_badcharset_dquoted', "+ [BADCHARSET (\"jhdsfdgsfg\")] some random text hagahaha\r\n");
+ps('code_badcharset_literal', "+ [BADCHARSET ({2}\r\nAB)] some random text hagahaha\r\n");
+ps('code_badcharset_literal_two', "+ [BADCHARSET ({2}\r\nAB {3}\r\n123)] some random text hagahaha\r\n");
+ps('code_parse', "+ [PARSE] some random text hagahaha\r\n");
+ps('code_permflags', "+ [PERMANENTFLAGS ()] some random text hagahaha\r\n");
+ps('code_permflags_multi', "+ [PERMANENTFLAGS (\\Answered \\Deleted)] some random text hagahaha\r\n");
+ps('code_readonly', "+ [READ-ONLY] some random text hagahaha\r\n");
+ps('code_readwrite', "+ [READ-WRITE] some random text hagahaha\r\n");
+ps('code_trycreate', "+ [TRYCREATE] some random text hagahaha\r\n");
+ps('code_uidnext', "+ [UIDNEXT 345] some random text hagahaha\r\n");
+ps('code_uidvalidity', "+ [UIDVALIDITY 654] some random text hagahaha\r\n");
+ps('code_unseen', "+ [UNSEEN 654] some random text hagahaha\r\n");
+ps('code_atom', "+ [G FGH] some random text hagahaha\r\n");
+ps('code_atom_noarg', "+ [J] some random text hagahaha\r\n");
+      
+module.exports = test_utils.tests();
