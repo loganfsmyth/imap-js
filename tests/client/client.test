@@ -53,8 +53,7 @@ module.exports = testCase({
     cl.status('INBOX', ['MESSAGES', 'RECENT', 'UIDNEXT', 'UIDVALIDITY', 'UNSEEN'], noerr(test));
   },
   create: function(test) {
-//      cl.create('"INBOX.mybox"', noerr(test));
-    noerr(test)();
+    cl.create('"INBOX.mybox"', noerr(test));
   },
   append: function(test) {
     cl.append('"INBOX"', ['\\Seen'], '', 'Date: Mon, 7 Feb 1994 21:52:21 -0800 (PST)\r\nFrom: Fred Foobar <foorbar@blurdy.com>\r\nSubject: AHHHH\r\nTo: me@example.com\r\nContent-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n\r\nHELLO there me, how are things going!!!!!', noerr(test));
@@ -69,18 +68,16 @@ module.exports = testCase({
     cl.store('1', '+FLAGS', '(\\Seen \\Deleted)', noerr(test));
   },
   copy: function(test) {
-    cl.copy('1', 'INBOX.myotherbox', noerr(test));
+    cl.copy('1', 'INBOX.mybox', noerr(test));
   },
   fetch: function(test) {
     cl.fetch('1', 'ALL', noerr(test));
   },
   rename: function(test) {
-    //cl.rename('INBOX.mybox', 'INBOX.myotherbox', noerr(test));
-    noerr(test)();
+    cl.rename('INBOX.mybox', 'INBOX.myotherbox', noerr(test));
   },
   'delete': function(test) {
-//      cl['delete']('"INBOX.myotherbox"', noerr(test));
-    noerr(test)();
+    cl['delete']('"INBOX.myotherbox"', noerr(test));
   },
   unsubscribe: function(test) {
     cl.unsubscribe('INBOX', noerr(test));
