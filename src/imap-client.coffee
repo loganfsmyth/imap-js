@@ -76,7 +76,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
     # On timeout, it it happens before greeting
     # Then initialization failed so run cb w/ error
-    @stream.setTimeout timeout, =>
+    @socket.setTimeout timeout, =>
       cb true if not greeted
       @emit 'timeout'
 
