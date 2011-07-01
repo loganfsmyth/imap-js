@@ -1,10 +1,13 @@
 
 {ImapParser}    = require './imap-parser'
 {EventEmitter}  = require 'events'
+imap_connection = require './imap-connection'
 util            = require 'util'
-tls             = require 'tls'
-net             = require 'net'
 
+
+# Define custom contants to represent the state of the client
+# and provide a simple way to display that contant as a string
+# for easier debugging.
 STATE_ERROR   = 0x0
 STATE_UNAUTH  = 0x1
 STATE_AUTH    = 0x2
@@ -19,6 +22,12 @@ stateStr = (state) ->
     when STATE_SELECT then "Select"
     when STATE_LOGOUT then "Logout"
 
+
+### Helpers
+#### defineCommand
+#
+# Takes all of the info for a command, and returns the actual command
+# function that will be executed to add everything to the command queue.
 defineCommand = ({state: state, command: command_cb, response: response_cb, continue: continue_cb}) ->
   states = [STATE_ERROR, STATE_LOGOUT, STATE_UNAUTH, STATE_AUTH, STATE_SELECT]
   return (args..., cb) ->
@@ -41,78 +50,111 @@ defineCommand = ({state: state, command: command_cb, response: response_cb, cont
     console.log command
 
 
+#### getCommandTag
+#
+# Converts an integer into an IMAP command tag for use uniquely identifying
+# commands and command responses.
+#
+# Make a list of all CHARs except atom-specials and '+',
+# then looks in that list using integer arguments.
+tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
+getCommandTag = (count) ->
+  len = tagChars.length
+  tag = ''
+  while count >= 1
+    i = Math.floor count%len
+    count /= len
+    tag = tagChars[i] + tag
+  return tag
 
+
+### ImapClient class
+#
+#### Events
+#
+#* 'greeting'  
+#   The 'greeting' event is triggered once the greeting has been received
+#   from the server and starttls has optionally been executed.
+#
+#* 'error'  
+#   The 'error' event is triggered if the greeting is not received after
+#   the timeout period, or if there is a problem with the tls negotiation.
+#
+#* 'bye'  
+#   The 'bye' event is triggered if the server forces a disconnect.
+#
 exports.ImapClient = class ImapClient extends EventEmitter
-  constructor: (host, port, secure, options, cb) ->
+  constructor: (host, port, security, options, cb) ->
     super()
 
     if typeof options == 'function'
       cb = options
       options = {}
 
-    timeout = options.timeout || 500
 
-    greeted = false
-
+    # Initialize all standard variables.
     @tag_counter = 1
     @responseCallbacks = {}
     @continuationQueue = []
     @untagged = {}
     @state = STATE_ERROR
 
-    # For SSL immediately open an SSL/TLS connection
-    if secure == 'ssl'
-      @stream = tls.connect port, host, () =>
-        cb true if not @stream.authorized
-      @socket = @stream.socket
+    # Create the client connection.
+    # If there is an error, the 'error' event will be triggered in order
+    # to let the client user know that something failed.
+    @stream = imap_connection.createClientConnection port: port, host: host, security: security, (err) =>
+      if err
+        @emit 'error', new Error err
 
-    # For TLS and unsecure, we start with a standard connection
-    else
-      @stream = @socket = net.createConnection port, host
-
-
-    # When we receive data, pass it to the parser
+    # When we receive data, pass it to the parser.
     @stream.on 'data', (d) => @_onData d
 
-    # On timeout, it it happens before greeting
-    # Then initialization failed so run cb w/ error
-    @socket.setTimeout timeout, =>
-      cb true if not greeted
-      @emit 'timeout'
+    # Set up the provided callback to run when a greeting message is received.
+    @on 'greeting', cb if cb
 
-    # Pass connect to our listeners
-    @socket.setKeepAlive true  # @TODO Needed?
-    @socket.on 'connect', => @emit 'connect'
-
-
+    
+    # Create a new ImapParser object starting in greeting parsing mode.
+    # Then bind all of the parser events to ImapClient methods
+    # to process incoming responses.
     @parser = new ImapParser ImapParser.GREETING
     @parser.onContinuation  = (resp) => @_processContinuation resp
     @parser.onUntagged      = (resp) => @_processUntagged resp
     @parser.onTagged        = (resp) => @_processTagged resp
-    @parser.onGreeting = (resp) =>
+    @parser.onGreeting      = (resp) =>
 
-      greeted = true # stops timeout from triggering cb
-
+      # When a greeting is received, process which type of response it was.
+      #
+      # * A BYE response means that the server is going to disconnect immediately.
+      #   This could be for instance because it is too overloaded to accept more.
+      # * A PREAUTH response means that the connection is already authenticated,
+      #   so it is unneccesary to use 'LOGIN' or 'AUTHENTICATE' commands to
+      #   authenticate the current IMAP session.
+      # * A OK response means that the connection was made properly, but
+      #   the session is still unauthorized.
+      #
       @state = switch resp.type
         when 'BYE'      then STATE_LOGOUT
         when 'PREAUTH'  then STATE_AUTH
         else STATE_UNAUTH
-      @_processUntagged resp
+
+      if resp.type == 'BYE'
+        @emit 'bye', resp.text
+        return
 
       # For TLS, we need to run STARTTLS before before proceeding
-      if secure == 'tls'
-        @starttls cb
+      if security == 'tls'
+        @starttls (err) =>
+          if err
+            @emit 'error', new Error "Failed to establish TLS connection"
+          else
+            @emit 'greeting'
 
       # If we got a greeting on a non-tls connection, it's all working
       else
-        process.nextTick cb
+        @emit 'greeting'
 
-  STATE_ERROR:  STATE_ERROR,
-  STATE_UNAUTH: STATE_UNAUTH,
-  STATE_AUTH:   STATE_AUTH,
-  STATE_SELECT: STATE_SELECT,
-  STATE_LOGOUT: STATE_LOGOUT,
-
+  # Data callback when data is received from the network. It is
+  # passed directly into the parser, which processes it.
   _onData: (d) ->
     console.log 'Parsing --' + d.toString('utf8') + '--'
     try
@@ -120,6 +162,8 @@ exports.ImapClient = class ImapClient extends EventEmitter
     catch e
       console.log e
 
+  # Response callback when an untagged '*' response is received from the
+  # IMAP server. The response then needs to be parsed and aggregated for reading.
   _processUntagged: (response) ->
     switch response.type
       when 'CAPABILITY'
@@ -140,6 +184,9 @@ exports.ImapClient = class ImapClient extends EventEmitter
       when 'BYE'
         @untagged['bye'] = response.text.text
 
+  # Response callback when a continuation '+' response is received from the IMAP
+  # server. This response triggers the continuation handler of the last request,
+  # which will return a response to be written, or nothing if the response is completed.
   _processContinuation: (response) ->
     handler = @continuationQueue.shift()
     handler response, (result) =>
@@ -148,18 +195,17 @@ exports.ImapClient = class ImapClient extends EventEmitter
         @continuationQueue.unshift handler
 
 
+  # Response callback when a tagged response is received from the IMAP server.
+  # This response triggers the response callback of whichever request is being
+  # responded to.
   _processTagged: (response) ->
-    console.log(response)
-    console.log @responseCallbacks
     @responseCallbacks[response.tag]?.call @, (if response.type != 'OK' then response.type else null), response.text
     delete @responseCallbacks[response.tag]
     @untagged = {}
 
 
 
-  ###
-  Client Commands - Any State
-  ###
+  #### Client Commands - Any State
   capability: defineCommand
     state: STATE_UNAUTH,
     command: 'CAPABILITY',
@@ -176,25 +222,20 @@ exports.ImapClient = class ImapClient extends EventEmitter
       cb err, resp
 
 
-  ###
-  Client Commands - Not Authenticated
-  ###
+  #### Client Commands - Not Authenticated
   starttls: defineCommand
     state: STATE_UNAUTH,
     command: 'STARTTLS'
     response: (err, resp, cb) ->
       if err then return cb err, resp
 
-      pair = new tls.createSecurePair()
+      # Replace the current cryptostream with a cleartext version
+      @stream = @stream.starttls (err) =>
+        cb err
 
-      listeners = @stream.listeners 'data'
-      @stream.removeAllListeners('data')
-      @stream = pipe pair, @stream
-      (@stream.on 'data', f for f in listeners)
+      # New stream, rebind data listener
+      @stream.on 'data', (d) => @_onData d
 
-      @socket = @stream.socket
-
-      pair.on 'secure', -> cb err, resp
 
   # @TODO
   authenticate: defineCommand
@@ -211,9 +252,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
 
-  ###
-  Client Commands - Authenticated
-  ###
+  #### Client Commands - Authenticated
   select: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "SELECT #{mailbox}",
@@ -265,9 +304,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
 
-  ###
-  Client Commands Selected
-  ###
+  #### Client Commands Selected
   check: defineCommand
     state: STATE_AUTH,
     command: "CHECK",
@@ -301,37 +338,19 @@ exports.ImapClient = class ImapClient extends EventEmitter
     command: (command, args...) -> "UID #{command} #{args.join(' ')}",
 
 
+  #### API Functions
+  in: ->
+    
+
+  out: ->
+    
+
+  caps: ->
+    
+
+  boxes: ->
+    
 
 
-# Make a list of all CHARs except atom-specials and '+'
-tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
 
-getCommandTag = (count) ->
-  len = tagChars.length
-  tag = ''
-  while count >= 1
-    i = Math.floor count%len
-    count /= len
-    tag = tagChars[i] + tag
-  return tag
-
-
-pipe = (pair, socket) ->
-  pair.encrypted.pipe socket
-  socket.pipe pair.encrypted
-  pair.fd = socket.fd
-  cleartext = pair.cleartext
-  cleartext.socket = socket
-  cleartext.encrypted = pair.encrypted
-  cleartext.authorized = false
-
-  onerror = (e) -> if cleartext._controlRelease then cleartext.emit 'error', e
-  onclose = ->
-    socket.removeListener 'error', onerror
-    socket.removeListener 'close', onclose
-
-  socket.on 'error', onerror
-  socket.on 'close', onclose
-
-  return cleartext
 
