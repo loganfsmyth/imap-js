@@ -1,3 +1,13 @@
+
+### Mailbox
+#
+#### Events
+# * 'newmessage'  
+#   The 'newmessage' event is triggered when a new message arrive in an mailbox.
+# * 'deleted'  
+#   The 'deleted' event is triggered when the mailbox is deleted by this client
+#   OR in another session.
+#
 class ImapMailbox
   constructor: (@client, @name) ->
     @deleted = false
@@ -29,10 +39,14 @@ class ImapMailbox
       @deleted = true
       cb err, resp
 
+  status: (args..., cb) ->
+    @client.status cb
+
+
+
+  # These two return MessageSets
   search: (args..., cb) ->
     @client.search args..., cb
   fetch: (args..., cb) ->
     
 
-  status: (args..., cb) ->
-    @client.status cb

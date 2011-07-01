@@ -72,15 +72,15 @@ getCommandTag = (count) ->
 #
 #### Events
 #
-#* 'greeting'  
+# * 'greeting'  
 #   The 'greeting' event is triggered once the greeting has been received
 #   from the server and starttls has optionally been executed.
 #
-#* 'error'  
+# * 'error'  
 #   The 'error' event is triggered if the greeting is not received after
 #   the timeout period, or if there is a problem with the tls negotiation.
 #
-#* 'bye'  
+# * 'bye'  
 #   The 'bye' event is triggered if the server forces a disconnect.
 #
 exports.ImapClient = class ImapClient extends EventEmitter
@@ -193,24 +193,34 @@ exports.ImapClient = class ImapClient extends EventEmitter
   #
   _processUntagged: (response) ->
     switch response.type
-      when 'CAPABILITY'
-        (@untagged['capability'] ?= []).push response.value
+      when 'CAPABILITY' # immediate?
+        @untagged['capability'] = response.value
       when 'LIST'
         (@untagged['list'] ?= [])[response.mailbox] =
           path:   response.mailbox.split response.delim
           flags:  response['list-flags']
       when 'LSUB'
-        @untagged['lsub'] = ''
-#    when 'STATUS', 'EXPUNGE', 'FETCH', 'SEARCH'
+        (@untagged['lsub'] ?= [])[response.mailbox] =
+          path:   response.mailbox.split response.delim
+          flags:  response['list-flags']
+
+      when 'STATUS' # immediate?
+        @untagged['status'] = response
+      when 'EXPUNGE'
+        (@untagged['expunge'] ?= []).push response.value
+      when 'SEARCH'
+        @untagged['search'] = response.value
       when 'FLAGS'
         @untagged['flags'] = response.value
-      when 'EXISTS'
+      when 'EXISTS' # immediate - new messages
         @untagged['exists'] = response.value
-      when 'RECENT'
+      when 'RECENT' # immediate
         @untagged['recent'] = response.value
       when 'BYE'
         @untagged['bye'] = response.text.text
 
+      when 'FETCH'
+        (@untagged['fetch'] ?= {})[response.value] = response['msg-att']
 
 
 
@@ -383,7 +393,10 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
   #### API Functions
-  in: ->
+  in: (user, password) ->
+    
+
+  auth: (mechanism) ->
     
 
   out: ->
@@ -392,7 +405,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
   caps: ->
     
 
-  boxes: ->
+  boxes: ({unread})->
     
 
 
