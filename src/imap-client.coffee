@@ -373,23 +373,24 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
   search: defineCommand
     state: STATE_AUTH,
-    command: (charset, criteria) -> "SEARCH #{charset} #{criteria}",
+    command: (charset, criteria, uid) -> "#{'UID ' if uid else ''}SEARCH #{charset} #{criteria}",
+    response: (err, resp, cb) =>
+      if err
+        cb err, resp
+      else
+        cb null, resp, @untagged['search']
 
   fetch: defineCommand
     state: STATE_AUTH,
-    command: (seqset, item_names) -> "FETCH #{seqset} #{item_names}",
+    command: (seqset, item_names, uid) -> "#{'UID ' if uid else ''}FETCH #{seqset} #{item_names}",
 
   store: defineCommand
     state: STATE_AUTH,
-    command: (seqset, item_name, value) -> "STORE #{seqset} #{item_name} #{value}",
+    command: (seqset, item_name, value, uid) -> "#{'UID ' if uid else ''}STORE #{seqset} #{item_name} #{value}",
 
   copy: defineCommand
     state: STATE_AUTH,
-    command: (seqset, mailbox) -> "COPY #{seqset} #{mailbox}",
-
-  uid: defineCommand
-    state: STATE_AUTH,
-    command: (command, args...) -> "UID #{command} #{args.join(' ')}",
+    command: (seqset, mailbox, uid) -> "#{'UID ' if uid else ''}COPY #{seqset} #{mailbox}",
 
 
   #### API Functions
