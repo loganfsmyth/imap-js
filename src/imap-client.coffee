@@ -360,19 +360,19 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
   #### Client Commands - Selected
   check: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: "CHECK",
 
   close: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: "CLOSE",
 
   expunge: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: "EXPUNGE",
 
   search: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: (charset, criteria, uid) -> "#{'UID ' if uid else ''}SEARCH #{charset} #{criteria}",
     response: (err, resp, cb) =>
       if err
@@ -381,15 +381,15 @@ exports.ImapClient = class ImapClient extends EventEmitter
         cb null, resp, @untagged['search']
 
   fetch: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: (seqset, item_names, uid) -> "#{'UID ' if uid else ''}FETCH #{seqset} #{item_names}",
 
   store: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: (seqset, item_name, value, uid) -> "#{'UID ' if uid else ''}STORE #{seqset} #{item_name} #{value}",
 
   copy: defineCommand
-    state: STATE_AUTH,
+    state: STATE_SELECT,
     command: (seqset, mailbox, uid) -> "#{'UID ' if uid else ''}COPY #{seqset} #{mailbox}",
 
 
