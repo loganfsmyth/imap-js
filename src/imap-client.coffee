@@ -84,6 +84,16 @@ getCommandTag = (count) ->
 #   The 'bye' event is triggered if the server forces a disconnect.
 #
 exports.ImapClient = class ImapClient extends EventEmitter
+
+  #### ImapClient
+  #
+  ##### Arguments
+  # * *host*      - The host to connect to.
+  # * *port*      - The port to connect to.
+  # * *security*  - The type of security to use. (null, 'tls', 'ssl')
+  # * *options*   - Optional options for the TLS connection. See docs for starttls.
+  # * *cb*        - Optional 'greeting' event handler. Format: `function() {}`
+  #
   constructor: (host, port, security, options, cb) ->
     super()
 
@@ -102,9 +112,8 @@ exports.ImapClient = class ImapClient extends EventEmitter
     # Create the client connection.
     # If there is an error, the 'error' event will be triggered in order
     # to let the client user know that something failed.
-    @stream = imap_connection.createClientConnection port: port, host: host, security: security, (err) =>
-      if err
-        @emit 'error', new Error err
+    @stream = imap_connection.createClientConnection port: port, host: host, security: security, tlsoptions: options, timeout: 500, (err) =>
+      @emit 'error', new Error err if err
 
     # When we receive data, pass it to the parser.
     @stream.on 'data', (d) => @_onData d
@@ -153,17 +162,35 @@ exports.ImapClient = class ImapClient extends EventEmitter
       else
         @emit 'greeting'
 
+
+
+
+  #### _onData
+  #
   # Data callback when data is received from the network. It is
   # passed directly into the parser, which processes it.
-  _onData: (d) ->
-    console.log 'Parsing --' + d.toString('utf8') + '--'
+  #
+  ##### Arguments
+  # * *data* - Data to be parsed.
+  #
+  _onData: (data) ->
+    console.log 'Parsing --' + data.toString('utf8') + '--'
     try
-      @parser.execute d
+      @parser.execute data
     catch e
       console.log e
 
+
+
+
+  #### _processUntagged
+  #
   # Response callback when an untagged '*' response is received from the
   # IMAP server. The response then needs to be parsed and aggregated for reading.
+  #
+  ##### Arguments
+  # * *response* - The response object from the parser.
+  #
   _processUntagged: (response) ->
     switch response.type
       when 'CAPABILITY'
@@ -184,9 +211,18 @@ exports.ImapClient = class ImapClient extends EventEmitter
       when 'BYE'
         @untagged['bye'] = response.text.text
 
+
+
+
+  #### _processContinuation
+  #
   # Response callback when a continuation '+' response is received from the IMAP
   # server. This response triggers the continuation handler of the last request,
   # which will return a response to be written, or nothing if the response is completed.
+  #
+  ##### Arguments
+  # * *response* - The response object from the parser.
+  #
   _processContinuation: (response) ->
     handler = @continuationQueue.shift()
     handler response, (result) =>
@@ -195,9 +231,17 @@ exports.ImapClient = class ImapClient extends EventEmitter
         @continuationQueue.unshift handler
 
 
+
+
+  #### _processTagged
+  #
   # Response callback when a tagged response is received from the IMAP server.
   # This response triggers the response callback of whichever request is being
   # responded to.
+  #
+  ##### Arguments
+  # * *response* - The response object from the parser
+  #
   _processTagged: (response) ->
     @responseCallbacks[response.tag]?.call @, (if response.type != 'OK' then response.type else null), response.text
     delete @responseCallbacks[response.tag]
@@ -304,7 +348,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
 
-  #### Client Commands Selected
+  #### Client Commands - Selected
   check: defineCommand
     state: STATE_AUTH,
     command: "CHECK",
