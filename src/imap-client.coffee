@@ -311,7 +311,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
     state: STATE_AUTH,
     command: (mailbox) -> "SELECT #{mailbox}",
     response: (err, resp, cb) ->
-      if err then @state = STATE_SELECT
+      if not err then @state = STATE_SELECT
       cb err, resp
 
   examine: defineCommand
@@ -373,7 +373,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
   search: defineCommand
     state: STATE_SELECT,
-    command: (charset, criteria, uid) -> "#{'UID ' if uid else ''}SEARCH #{charset} #{criteria}",
+    command: (charset, criteria, uid) -> (if uid then 'UID ' else '') + "SEARCH #{charset} #{criteria}",
     response: (err, resp, cb) =>
       if err
         cb err, resp
@@ -382,31 +382,75 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
   fetch: defineCommand
     state: STATE_SELECT,
-    command: (seqset, item_names, uid) -> "#{'UID ' if uid else ''}FETCH #{seqset} #{item_names}",
+    command: (seqset, item_names, uid) -> (if uid then 'UID ' else '') + "FETCH #{seqset} #{item_names}",
+    response: (err, resp, cb) =>
+      if err
+        cb err, resp
+      else
+        cb null, resp, @untagged['fetch']
 
   store: defineCommand
     state: STATE_SELECT,
-    command: (seqset, item_name, value, uid) -> "#{'UID ' if uid else ''}STORE #{seqset} #{item_name} #{value}",
+    command: (seqset, action, flags, uid) ->
+      act = switch action
+        when 'add' then '+FLAGS'
+        when 'set' then 'FLAGS'
+        when 'remove' then '-FLAGS'
+
+      (if uid then 'UID ' else '') + "STORE #{seqset} #{act} #{flags.join(' ')}"
 
   copy: defineCommand
     state: STATE_SELECT,
-    command: (seqset, mailbox, uid) -> "#{'UID ' if uid else ''}COPY #{seqset} #{mailbox}",
+    command: (seqset, mailbox, uid) -> (if uid then 'UID ' else '') + "COPY #{seqset} #{mailbox}",
 
 
-  #### API Functions
-  in: (user, password) ->
-    
+  #### in
+  #
+  ##### Arguments
+  #
+  # * *user*      -
+  # * *password*  -
+  # * *cb*        -
+  #
+  in: (user, password, cb) ->
+    @login user, password, cb
 
+
+  #### out
+  #
+  ##### Arguments
+  #
+  # * *cb*
+  #
+  out: (cb) ->
+    @logout cb
+
+
+  #### auth
+  #
+  ##### Arguments
+  #
+  # * *mechanism* - 
+  #
   auth: (mechanism) ->
     
-
-  out: ->
+  #### caps
+  #
+  ##### Arguments
+  #
+  # * *cb* - 
+  #
+  caps: (cb) ->
     
 
-  caps: ->
-    
-
-  boxes: ({unread})->
+  #### boxes
+  #
+  ##### Arguments
+  #
+  # * *options*
+  #     * *unread* - 
+  # * *cb*
+  boxes: ({unread}, cb)->
     
 
 

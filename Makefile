@@ -3,7 +3,6 @@ COFFEE_SRC = \
   src/imap-client.coffee    \
   src/imap-parser.coffee    \
   src/imap-mailbox.coffee   \
-  src/imap-message.coffee   \
   src/imap-messageset.coffee\
   src/imap-connection.coffee
 

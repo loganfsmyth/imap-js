@@ -1,4 +1,6 @@
 
+{MessageSet} = require './imap-messageset'
+
 ### Mailbox
 #
 #### Events
@@ -12,41 +14,129 @@ class ImapMailbox
   constructor: (@client, @name) ->
     @deleted = false
 
-  ensureSelected: ->
-    @client.select @name if @client.selected() != @name
-
+  #### check
+  #
+  ##### Arguments
+  #
+  # * *cb* - Completion callback. Format: `function(err) { }`
+  #
   check: (cb) ->
     @client.check @name, cb
+
+
+  #### lsub
+  #
+  ##### Arguments
+  #
+  # * *cb* - Completion callback. Format: `function(err) { }`
+  #
   expunge: (cb) ->
     @client.expunge @name, cb
+
+  #### subscribe
+  #
+  ##### Arguments
+  #
+  # * *cb* - Completion callback. Format: `function(err) { }`
+  #
   subscribe: (cb) ->
     @client.subscribe @name, cb
+
+  #### unsubscribe
+  #
+  ##### Arguments
+  #
+  # * *cb* - Completion callback. Format: `function(err) { }`
+  #
   unsubscribe: (cb) ->
     @client.unsubscribe @name, cb
+
+  #### list
+  #
+  ##### Arguments
+  #
+  # * *cb* - Completion callback. Format: `function(err) { }`
+  #
   list: (cb) ->
     @client.list @name, cb
+
+  #### lsub
+  #
+  ##### Arguments
+  #
+  # * *cb* - Completion callback. Format: `function(err) { }`
+  #
   lsub: (cb) ->
     @client.lsub @name, cb
 
 
+  #### rename
+  #
+  ##### Arguments
+  #
+  # * *name*  - The new name of the mailbox.
+  # * *cb*    - Completion callback. Format: `function(err) { }`
+  #
   rename: (name, cb) ->
     @client.rename @name, name, (err, resp) ->
       @name = name if not err
       cb err, resp
 
+
+  #### delete
+  #
+  ##### Arguments
+  #
+  # * *cb* - Deletion callback function. Format: `function(err) { }`
+  #
   delete: (cb) ->
     @client.delete @name, (err, resp) ->
       @deleted = true
       cb err, resp
 
-  status: (args..., cb) ->
-    @client.status cb
+
+  #### status
+  #
+  ##### Arguments
+  #
+  # * *items* - Which status items to request. (MESSAGES, RECENT, UIDNEXT, UIDVALIDITY, UNSEEN)
+  # * *cb*    - Completion callback. Format: `function(err) { }`
+  #
+  status: (items, cb) ->
+    @client.status @name, items, cb
 
 
 
-  # These two return MessageSets
-  search: (args..., cb) ->
-    @client.search args..., cb
-  fetch: (args..., cb) ->
-    
+  #### search
+  #
+  ##### Arguments
+  #
+  # * *criteria*  - A Search criteria string
+  # * *cb*        - The result callback of the format `function(err, messageset) { }`
+  # 
+  search: (criteria, cb) ->
+    @client.search 'UTF-8', criteria, true, (err, resp, result) ->
+      if err
+        cb err, null
+      else
+        cb null, new MessageSet @client, result
+
+
+  #### fetch
+  #
+  ##### Arguments
+  #
+  # * *sequence*    - The sequence to fetch
+  # * *uid*         - Is the sequence UID values?
+  # * *item_names*  - Item names. See Messageset.fetch
+  # * *cb*          - The completion callback. Format: `function(err, messageset) { }`
+  #
+  fetch: (sequence, uid, item_names, cb) ->
+    set = new MessageSet @client, sequence
+    set.fetch uid, item_names, (err) ->
+      if err
+        cb err
+      else
+        cb null, set
+
 
