@@ -31,13 +31,13 @@ exports.ImapParser = class ImapParser
   _modifiedUtf7ToUtf8: (data) ->
     result = ''
     start = -1
-    for i in [0..data.length]
+    for i in [0...data.length]
       if data[i] == '-'
         if start >= 0
           if i-start == 0
             result += '&'
           else
-            result += utf7To8.convert data.slice(start, i+1).replace('&', '+').replace(',', '/')
+            result += utf7to8.convert data.slice(start, i+1).replace('&', '+').replace(',', '/')
           start = -1
         else
           result += '-'

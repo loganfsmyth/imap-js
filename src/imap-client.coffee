@@ -174,11 +174,11 @@ exports.ImapClient = class ImapClient extends EventEmitter
   # * *data* - Data to be parsed.
   #
   _onData: (data) ->
-    console.log 'Parsing --' + data.toString('utf8') + '--'
-    try
-      @parser.execute data
-    catch e
-      console.log e
+#    console.log 'Parsing --' + data.toString('utf8') + '--'
+#    try
+    @parser.execute data
+#    catch e
+#      console.log e
 
 
 
@@ -222,6 +222,9 @@ exports.ImapClient = class ImapClient extends EventEmitter
       when 'FETCH'
         (@untagged['fetch'] ?= {})[response.value] = response['msg-att']
 
+      when 'OK', 'BAD', 'PREAUTH'
+        (@untagged[response.type.toLowerCase()] ?= {})[response.text.code.type.toLowerCase()] = response.text
+
 
 
   #### _processContinuation
@@ -260,14 +263,20 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
   #### Client Commands - Any State
+  #
+  # CAPABILITY response
   capability: defineCommand
     state: STATE_UNAUTH,
     command: 'CAPABILITY',
+    response: (err, resp, cb) ->
+      resp.capability = @untagged['capability']
+      cb err, resp
 
   noop: defineCommand
     state: STATE_UNAUTH,
     command: 'NOOP',
 
+  # BYE response
   logout: defineCommand
     state: STATE_UNAUTH,
     command: 'LOGOUT',
@@ -307,13 +316,21 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
   #### Client Commands - Authenticated
+  #
+  # FLAGS, EXISTS, RECENT response
+  # OK [UNSEEN, PERMANENTFLAGS, UIDNEXT, UIDVALIDITY]
   select: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "SELECT #{mailbox}",
     response: (err, resp, cb) ->
       if not err then @state = STATE_SELECT
+      resp.flags = @untagged['flags']
+      resp.exists = @untagged['exists']
+      resp.recent = @untagged['recent']
+
       cb err, resp
 
+  # Same responses as SELECT
   examine: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "EXAMINE #{mailbox}",
@@ -338,17 +355,31 @@ exports.ImapClient = class ImapClient extends EventEmitter
     state: STATE_AUTH,
     command: (mailbox) -> "UNSUBSCRIBE #{mailbox}",
 
+  # LIST response
   list: defineCommand
     state: STATE_AUTH,
     command: (refname, mailbox) -> "LIST #{refname} #{mailbox}",
+    response: (err, resp, cb) ->
+      resp.list = @untagged['list']
+      cb err, resp
 
+    
+
+  # LSUB response
   lsub: defineCommand
     state: STATE_AUTH,
     command: (refname, mailbox) -> "LSUB #{refname} #{mailbox}",
+    response: (err, resp, cb) ->
+      resp.lsub = @untagged['lsub']
+      cb err, resp
 
+  # STATUS response
   status: defineCommand
     state: STATE_AUTH,
     command: (mailbox, items) -> "STATUS #{mailbox} (#{items.join(' ')})",
+    response: (err, resp, cb) ->
+      resp.status = @untagged['status']
+      cb err, resp
 
   append: defineCommand
     state: STATE_AUTH,
@@ -367,28 +398,31 @@ exports.ImapClient = class ImapClient extends EventEmitter
     state: STATE_SELECT,
     command: "CLOSE",
 
+  # EXPUNGE response
   expunge: defineCommand
     state: STATE_SELECT,
     command: "EXPUNGE",
+    response: (err, resp, cb) ->
+      resp.expunge = @untagged['expunge']
+      cb err, resp
 
+  # SEARCH response
   search: defineCommand
     state: STATE_SELECT,
     command: (charset, criteria, uid) -> (if uid then 'UID ' else '') + "SEARCH #{charset} #{criteria}",
-    response: (err, resp, cb) =>
-      if err
-        cb err, resp
-      else
-        cb null, resp, @untagged['search']
+    response: (err, resp, cb) ->
+      resp.search = @untagged['search']
+      cb err, resp
 
+  # FETCH response
   fetch: defineCommand
     state: STATE_SELECT,
     command: (seqset, item_names, uid) -> (if uid then 'UID ' else '') + "FETCH #{seqset} #{item_names}",
-    response: (err, resp, cb) =>
-      if err
-        cb err, resp
-      else
-        cb null, resp, @untagged['fetch']
+    response: (err, resp, cb) ->
+      resp.fetch = @untagged['fetch']
+      cb err, resp
 
+  # FETCH response
   store: defineCommand
     state: STATE_SELECT,
     command: (seqset, action, flags, uid) ->
@@ -397,7 +431,10 @@ exports.ImapClient = class ImapClient extends EventEmitter
         when 'set' then 'FLAGS'
         when 'remove' then '-FLAGS'
 
-      (if uid then 'UID ' else '') + "STORE #{seqset} #{act} #{flags.join(' ')}"
+      (if uid then 'UID ' else '') + "STORE #{seqset} #{action} (#{flags.join(' ')})"
+    response: (err, resp, cb) ->
+      resp.fetch = @untagged['fetch']
+      cb err, resp
 
   copy: defineCommand
     state: STATE_SELECT,
