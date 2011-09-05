@@ -63,7 +63,10 @@ exports.ImapParser = class ImapParser
       when ipn.IMAP_UNTAGGED_RESPONSE
         o = switch v[0]
           when 'OK', 'BYE', 'BAD', 'NO'
-            ['type', 'text']
+            text_code = v.pop()
+            v.push text_code.text
+            v.push text_code.code
+            ['type', 'text', 'textcode']
           when 'CAPABILITY', 'FLAGS'
             ['type', 'value']
           when 'LIST', 'LSUB'
@@ -82,7 +85,11 @@ exports.ImapParser = class ImapParser
         @onContinuation? @zip o, v
 
       when ipn.IMAP_TAGGED_RESPONSE
-        @onTagged? @zip ['tag', 'type', 'text'], v
+        text_code = v.pop()
+        v.push text_code.text
+        v.push text_code.code
+
+        @onTagged? @zip ['tag', 'type', 'text', 'textcode'], v
 
       when ipn.IMAP_LIST
         @values[@values.length-1].push v

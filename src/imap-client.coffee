@@ -180,6 +180,18 @@ exports.ImapClient = class ImapClient extends EventEmitter
 #    catch e
 #      console.log e
 
+  _processTextCode: (response) -> 
+    if response.textcode?.type == 'CAPABILITY'
+      @response.capability = response.textcode.value
+    if response.textcode
+      (@response['textcodes'] ?= {})[response.textcode.type] =
+        type: response.textcode.type
+        value: response.textcode.value
+        state: response.type
+        text: response.text
+
+
+
   #### _processUntagged
   #
   # Response callback when an untagged '*' response is received from the
@@ -219,10 +231,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
         (@response['fetch'] ?= {})[response.value] = response['msg-att']
 
       when 'OK', 'BAD', 'PREAUTH', 'BYE', 'NO'
-        if response.text.code?.type == 'CAPABILITY'
-          @response.capability = response.text.code.value
-        (@response['text-code'] ?= {})[response.text.code.type] = response.text.code if response.text.code
-
+        @_processTextCode response
 
   #### _processContinuation
   #
@@ -253,11 +262,10 @@ exports.ImapClient = class ImapClient extends EventEmitter
   # * *response* - The response object from the parser
   #
   _processTagged: (response) ->
+    @_processTextCode response
+
     @response.type = response.type
-    @response.text = response.text.text
-    if response.text.code?.type == 'CAPABILITY'
-      @response.capability = response.text.code.value
-    (@response['text-code'] ?= {})[response.text.code.type] = response.text.code if response.text.code
+    @response.text = response.text
 
     @responseCallbacks[response.tag]?.call @, (if response.type != 'OK' then response.type else null), @response
     delete @responseCallbacks[response.tag]
