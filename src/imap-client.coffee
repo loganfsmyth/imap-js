@@ -191,7 +191,6 @@ exports.ImapClient = class ImapClient extends EventEmitter
         text: response.text
 
 
-
   #### _processUntagged
   #
   # Response callback when an untagged '*' response is received from the
@@ -229,7 +228,6 @@ exports.ImapClient = class ImapClient extends EventEmitter
         @response['recent'] = response.value
       when 'FETCH'
         (@response['fetch'] ?= {})[response.value] = response['msg-att']
-
       when 'OK', 'BAD', 'PREAUTH', 'BYE', 'NO'
         @_processTextCode response
 

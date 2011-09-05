@@ -114,7 +114,7 @@ exports.ImapParser = class ImapParser
           if v.length > 3
             o.push 'number'
           o.push 'value'
-        else if v[0] in ['BODY', 'RFC822', 'RFC822.HEADER', 'RFC822.TEXT', 'RFC822.SIZE', 'ENVELOPE', 'FLAGS', 'INTERNALEDATE', 'UID', 'BODYSTRUCTURE']
+        else if v[0] in ['BODY', 'RFC822', 'RFC822.HEADER', 'RFC822.TEXT', 'RFC822.SIZE', 'ENVELOPE', 'FLAGS', 'INTERNALDATE', 'UID', 'BODYSTRUCTURE']
           o = ['name', 'value']
 
         @values[@values.length-1].push @zip o, v
