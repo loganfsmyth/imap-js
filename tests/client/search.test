@@ -1,0 +1,23 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  search_success: function(test) {
+    con.search("UTF-8", [ 'FLAGGED', 'SINCE 1-Feb-1994', 'NOT FROM "Smith"' ], false, function(err, resp) {
+      test.deepEqual(resp.search, [ 2, 84, 882 ], 'search matches');
+      test.done();
+    });
+    
+    con._onData(new Buffer([
+      '* SEARCH 2 84 882',
+      'tag OK Search Complete'
+    ].join("\r\n") + "\r\n"));
+  },
+});
+

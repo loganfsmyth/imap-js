@@ -1,0 +1,26 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  status_success: function(test) {
+    con.status('INBOX', ['UIDNEXT', 'MESSAGES'], function(err, resp) {
+      test.deepEqual(resp.status, {
+        'MESSAGES': 231,
+        'UIDNEXT': 44292,
+      }, 'status matches');
+      test.done();
+    });
+    
+    con._onData(new Buffer([
+      '* STATUS INBOX (MESSAGES 231 UIDNEXT 44292)',
+      'tag OK Status Complete'
+    ].join("\r\n") + "\r\n"));
+  },
+});
+

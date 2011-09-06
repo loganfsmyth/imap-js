@@ -1,0 +1,45 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  select_examine_success: function(test) {
+    var req = new Buffer(["* FLAGS (\\Answered \\Flagged)",
+                    "* 23 EXISTS",
+                    "* 3 RECENT",
+                    "* OK [UNSEEN 4]",
+                    "* OK [PERMANENTFLAGS (\\Seen \\Perm)]",
+                    "* OK [UIDNEXT 5]",
+                    "* OK [UIDVALIDITY 6]",
+                    "tag OK Done"].join("\r\n") + "\r\n");
+
+    function response_handler(err, resp) {
+      test.deepEqual(resp.flags, ["\\Answered", "\\Flagged"], "Flags match");
+      test.equal(resp.exists, 23, "Exists match");
+      test.equal(resp.recent, 3, "recent match");
+      test.equal(resp.textcodes['UNSEEN'].value, 4, "unseen match");
+      test.equal(resp.textcodes['UIDNEXT'].value, 5, 'uidnext match');
+      test.equal(resp.textcodes['UIDVALIDITY'].value, 6, 'uidvalidity match');
+      test.deepEqual(resp.textcodes['PERMANENTFLAGS'].value, [ "\\Seen", "\\Perm" ], "Permanentflags match");
+    }
+
+    con.select('INBOX', function(err, resp) {
+      response_handler(err, resp);
+
+      con.examine('INBOX', function(err, resp) {
+        response_handler(err, resp);
+        test.done();
+      });
+
+      con._onData(req);
+    });
+
+    con._onData(req);
+  },
+});
+

@@ -1,0 +1,36 @@
+
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  login_success: function(test) {
+
+    con.login('me@example.com', 'somepass', function(err, resp) {
+      test.ok(!err, "No response error");
+      test.equal(resp['type'], 'OK', "Status OK");
+      test.equal(resp['text'], 'Logged in successfully', "Status text matches");
+      test.done();
+    });
+
+    con._onData(new Buffer("tag OK Logged in successfully\r\n"));
+  },
+  login_failure: function(test) {
+
+    con.login('me@example.com', 'somepass', function(err, resp) {
+      test.ok(err, 'Response error');
+      test.equal(resp['type'], 'NO', "Status NO");
+      test.equal(resp['text'], 'Failed to log in', 'Status text matches');
+      test.done();
+    });
+
+    con._onData(new Buffer("tag NO Failed to log in\r\n"));
+  }
+});
+
+

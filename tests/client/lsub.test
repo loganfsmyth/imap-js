@@ -1,0 +1,35 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  lsub_success: function(test) {
+    con.lsub('#news.', "comp.mail.*", function(err, resp) {
+      test.deepEqual(resp.lsub, {
+        '#news.comp.mail.mime': {
+          path: ['#news', 'comp', 'mail', 'mime' ],
+          flags: [],
+          delim: '.',
+        },
+        '#news.comp.mail.misc': {
+          path: ['#news', 'comp', 'mail', 'misc' ],
+          flags: [ "\\Hithere" ],
+          delim: '.',
+        }
+      }, 'LSUB matches');
+      test.done();
+    });
+    
+    con._onData(new Buffer([
+      '* LSUB () "." #news.comp.mail.mime',
+      '* LSUB (\\Hithere) "." #news.comp.mail.misc',
+      'tag OK LSUB Complete'
+    ].join("\r\n") + "\r\n"));
+  },
+});
+

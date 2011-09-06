@@ -101,6 +101,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
       cb = options
       options = {}
 
+    @testing = not host and not port and not security
 
     # Initialize all standard variables.
     @tag_counter = 1
@@ -108,15 +109,6 @@ exports.ImapClient = class ImapClient extends EventEmitter
     @continuationQueue = []
     @state = STATE_ERROR
     @_prepareResponse()
-
-    # Create the client connection.
-    # If there is an error, the 'error' event will be triggered in order
-    # to let the client user know that something failed.
-    @stream = imap_connection.createClientConnection port: port, host: host, security: security, tlsoptions: options, timeout: 500, (err) =>
-      @emit 'error', new Error err if err
-
-    # When we receive data, pass it to the parser.
-    @stream.on 'data', (d) => @_onData d
 
     # Set up the provided callback to run when a greeting message is received.
     @on 'greeting', cb if cb
@@ -161,6 +153,26 @@ exports.ImapClient = class ImapClient extends EventEmitter
       else
         @emit 'greeting'
 
+    if @testing
+      @parser.reinitialize ImapParser.RESPONSE
+      @state = STATE_SELECT
+      getCommandTag = -> 'tag'
+      @stream =
+        write: ->
+
+      process.nextTick =>
+        @emit 'greeting'
+
+    else
+      # Create the client connection.
+      # If there is an error, the 'error' event will be triggered in order
+      # to let the client user know that something failed.
+      @stream = imap_connection.createClientConnection port: port, host: host, security: security, tlsoptions: options, timeout: 500, (err) =>
+        @emit 'error', new Error err if err
+
+      # When we receive data, pass it to the parser.
+      @stream.on 'data', (d) => @_onData d
+
 
   _prepareResponse: ->
     @response = {}
@@ -204,18 +216,18 @@ exports.ImapClient = class ImapClient extends EventEmitter
       when 'CAPABILITY'
         @response['capability'] = response.value
       when 'LIST'
-        (@response['list'] ?= [])[response.mailbox] =
+        (@response['list'] ?= {})[response.mailbox] =
           path:   response.mailbox.split response.delim
           flags:  response['list-flags']
           delim:  response.delim
       when 'LSUB'
-        (@response['lsub'] ?= [])[response.mailbox] =
+        (@response['lsub'] ?= {})[response.mailbox] =
           path:   response.mailbox.split response.delim
           flags:  response['list-flags']
           delim:  response.delim
 
       when 'STATUS'
-        @response['status'] = response
+        @response['status'] = response.attrs
       when 'EXPUNGE'
         (@response['expunge'] ?= []).push response.value
       when 'SEARCH'
@@ -227,7 +239,9 @@ exports.ImapClient = class ImapClient extends EventEmitter
       when 'RECENT'
         @response['recent'] = response.value
       when 'FETCH'
-        (@response['fetch'] ?= {})[response.value] = response['msg-att']
+        obj = (@response['fetch'] ?= {})[response.value] = {}
+        for att in response['msg-att']
+          obj[att.name.toLowerCase()] = att.value
       when 'OK', 'BAD', 'PREAUTH', 'BYE', 'NO'
         @_processTextCode response
 
@@ -397,11 +411,11 @@ exports.ImapClient = class ImapClient extends EventEmitter
     state: STATE_SELECT,
     command: (seqset, action, flags, uid) ->
       act = switch action
-        when 'add' then '+FLAGS'
-        when 'set' then 'FLAGS'
-        when 'remove' then '-FLAGS'
+        when '+' then '+FLAGS'
+        when '-' then '-FLAGS'
+        else 'FLAGS'
 
-      (if uid then 'UID ' else '') + "STORE #{seqset} #{action} (#{flags.join(' ')})"
+      (if uid then 'UID ' else '') + "STORE #{seqset} #{act} (#{flags.join(' ')})"
 
   copy: defineCommand
     state: STATE_SELECT,

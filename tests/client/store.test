@@ -1,0 +1,35 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  store_success: function(test) {
+    con.store([2,3,4], '+', ['\\Unread'], false, function(err, resp) {
+      test.deepEqual(resp.fetch, {
+        '2': {
+          flags: [ '\\Seen', '\\Unread'],
+        },
+        '3': {
+          flags: [ '\\Seen2', '\\Unread' ],
+        },
+        '4': {
+          flags: [ '\\Seen3', '\\Unread' ],
+        },
+      }, 'fetch matches');
+      test.done();
+    });
+
+    con._onData(new Buffer([
+      '* 2 FETCH (FLAGS (\\Seen \\Unread))',
+      '* 3 FETCH (FLAGS (\\Seen2 \\Unread))',
+      '* 4 FETCH (FLAGS (\\Seen3 \\Unread))',
+      'tag OK Store Complete'
+    ].join("\r\n") + "\r\n"));
+  },
+});
+

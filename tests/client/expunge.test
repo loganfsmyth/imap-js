@@ -1,0 +1,26 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  expunge_success: function(test) {
+    con.expunge(function(err, resp) {
+      test.deepEqual(resp.expunge, [ 3, 3, 5, 8 ], 'expunge matches');
+      test.done();
+    });
+    
+    con._onData(new Buffer([
+      '* 3 EXPUNGE',
+      '* 3 EXPUNGE',
+      '* 5 EXPUNGE',
+      '* 8 EXPUNGE',
+      'tag OK Expunge Complete'
+    ].join("\r\n") + "\r\n"));
+  },
+});
+

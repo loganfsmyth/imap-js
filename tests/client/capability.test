@@ -1,0 +1,20 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  capability_success: function(test) {
+    con.capability(function(err, resp) {
+      test.deepEqual(resp.capability, [ 'IMAP4rev1', 'STARTTLS', 'AUTH=OMG', 'XOMG-OWOW' ], "CAPABILITIES match");
+      test.done();
+    });
+
+    con._onData(new Buffer("* CAPABILITY IMAP4rev1 STARTTLS AUTH=OMG XOMG-OWOW\r\ntag OK Done\r\n"));
+  },
+});
+

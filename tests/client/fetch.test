@@ -1,0 +1,46 @@
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  fetch_success: function(test) {
+    con.fetch([2,3,4], ['FLAGS', 'UID', 'BODY[1.4.HEADER]<4>'], false, function(err, resp) {
+      test.deepEqual(resp.fetch, {
+        '2': {
+          body: {
+            section: {
+              spec: '1.4.HEADER.FIELDS',
+              headers: [ 'H1', 'H2' ],
+            },
+            number: 4,
+            text: 'HAHA',
+          },
+          flags: [ '\\Seen' ],
+          uid: 123,
+        },
+        '3': {
+          flags: [ '\\Seen2' ],
+          uid: 124,
+        },
+        '4': {
+          flags: [ '\\Seen3' ],
+          uid: 125,
+        },
+      }, 'fetch matches');
+      test.done();
+    });
+    
+    con._onData(new Buffer([
+      '* 2 FETCH (FLAGS (\\Seen) UID 123 BODY[1.4.HEADER.FIELDS ("H1" "H2")]<4> "HAHA")',
+      '* 3 FETCH (FLAGS (\\Seen2) UID 124)',
+      '* 4 FETCH (FLAGS (\\Seen3) UID 125)',
+      'tag OK Fetch Complete'
+    ].join("\r\n") + "\r\n"));
+  },
+});
+

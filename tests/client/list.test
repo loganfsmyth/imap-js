@@ -1,0 +1,28 @@
+
+
+var testCase = require('nodeunit').testCase;
+var ImapClient = require('../../index').ImapClient;
+
+var con;
+
+module.exports = testCase({
+  setUp: function(cb) {
+    con = new ImapClient(false, false, false, cb);
+  },
+  list_success: function(test) {
+
+    con.list('', '*', function(err, resp) {
+      test.deepEqual(resp.list, {
+        '~/Mail/Foo': {
+          path: ['~', 'Mail', 'Foo'],
+          flags: [ '\\NoSelect' ],
+          delim: '/',
+        },
+      }, "Mailbox names match");
+      test.done();
+    });
+
+    con._onData(new Buffer("* LIST (\\NoSelect) \"/\" ~/Mail/Foo\r\ntag OK Done\r\n"));
+  },
+});
+
