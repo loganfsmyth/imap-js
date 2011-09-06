@@ -23,8 +23,8 @@ stateStr = (state) ->
     when STATE_LOGOUT then "Logout"
 
 
-### Helpers
-#### defineCommand
+# ## Helpers
+# ### defineCommand
 #
 # Takes all of the info for a command, and returns the actual command
 # function that will be executed to add everything to the command queue.
@@ -50,7 +50,7 @@ defineCommand = ({state: state, command: command_cb, response: response_cb, cont
     console.log command
 
 
-#### getCommandTag
+# ### getCommandTag
 #
 # Converts an integer into an IMAP command tag for use uniquely identifying
 # commands and command responses.
@@ -68,9 +68,9 @@ getCommandTag = (count) ->
   return tag
 
 
-### ImapClient class
+# ## ImapClient class
 #
-#### Events
+# ### Events
 #
 # * 'greeting'  
 #   The 'greeting' event is triggered once the greeting has been received
@@ -85,9 +85,7 @@ getCommandTag = (count) ->
 #
 exports.ImapClient = class ImapClient extends EventEmitter
 
-  #### ImapClient
-  #
-  ##### Arguments
+  # ### ImapClient
   # * *host*      - The host to connect to.
   # * *port*      - The port to connect to.
   # * *security*  - The type of security to use. (null, 'tls', 'ssl')
@@ -108,7 +106,7 @@ exports.ImapClient = class ImapClient extends EventEmitter
     @responseCallbacks = {}
     @continuationQueue = []
     @state = STATE_ERROR
-    @_prepareResponse()
+    @response = {}
 
     # Set up the provided callback to run when a greeting message is received.
     @on 'greeting', cb if cb
@@ -153,7 +151,11 @@ exports.ImapClient = class ImapClient extends EventEmitter
       else
         @emit 'greeting'
 
+
+
     if @testing
+      # For testing, add some stub values so that we can directly pass
+      # data into the parser by calling @_onData.
       @parser.reinitialize ImapParser.RESPONSE
       @state = STATE_SELECT
       getCommandTag = -> 'tag'
@@ -174,24 +176,20 @@ exports.ImapClient = class ImapClient extends EventEmitter
       @stream.on 'data', (d) => @_onData d
 
 
-  _prepareResponse: ->
-    @response = {}
-
-  #### _onData
+  # ### _onData
+  # * *data* - The data Buffer to be parsed.
   #
   # Data callback when data is received from the network. It is
   # passed directly into the parser, which processes it.
   #
-  ##### Arguments
-  # * *data* - Data to be parsed.
-  #
   _onData: (data) ->
-    console.log 'Parsing --' + data.toString('utf8') + '--'
-#    try
     @parser.execute data
-#    catch e
-#      console.log e
 
+  # ### _processTextCode
+  # * *response* - The response object from the parser.
+  #
+  # Handles adding textcodes to the current response object.
+  #
   _processTextCode: (response) -> 
     if response.textcode?.type == 'CAPABILITY'
       @response.capability = response.textcode.value
@@ -203,13 +201,11 @@ exports.ImapClient = class ImapClient extends EventEmitter
         text: response.text
 
 
-  #### _processUntagged
+  # ### _processUntagged
+  # * *response* - The response object from the parser.
   #
   # Response callback when an untagged '*' response is received from the
   # IMAP server. The response then needs to be parsed and aggregated for reading.
-  #
-  ##### Arguments
-  # * *response* - The response object from the parser.
   #
   _processUntagged: (response) ->
     switch response.type
@@ -245,14 +241,12 @@ exports.ImapClient = class ImapClient extends EventEmitter
       when 'OK', 'BAD', 'PREAUTH', 'BYE', 'NO'
         @_processTextCode response
 
-  #### _processContinuation
+  # ### _processContinuation
+  # * *response* - The response object from the parser.
   #
   # Response callback when a continuation '+' response is received from the IMAP
   # server. This response triggers the continuation handler of the last request,
   # which will return a response to be written, or nothing if the response is completed.
-  #
-  ##### Arguments
-  # * *response* - The response object from the parser.
   #
   _processContinuation: (response) ->
     handler = @continuationQueue.shift()
@@ -264,14 +258,12 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
 
 
-  #### _processTagged
+  # ### _processTagged
+  # * *response* - The response object from the parser
   #
   # Response callback when a tagged response is received from the IMAP server.
   # This response triggers the response callback of whichever request is being
   # responded to.
-  #
-  ##### Arguments
-  # * *response* - The response object from the parser
   #
   _processTagged: (response) ->
     @_processTextCode response
@@ -282,20 +274,31 @@ exports.ImapClient = class ImapClient extends EventEmitter
     @responseCallbacks[response.tag]?.call @, (if response.type != 'OK' then response.type else null), @response
     delete @responseCallbacks[response.tag]
 
-    @_prepareResponse()
+    @response = {}
 
 
-
-  #### Client Commands - Any State
+  # ## Client Commands - Any State
+  #
+  # ### capability
+  # Get a list of capabilities from the server. The list of strings
+  # specifies what functionality the server supports.
   #
   capability: defineCommand
     state: STATE_UNAUTH,
     command: 'CAPABILITY',
 
+  # ### noop
+  # No-op function to ping the server occasionally.
+  # Can be used to trigger untagged responses with new data.
+  #
   noop: defineCommand
     state: STATE_UNAUTH,
     command: 'NOOP',
 
+  # ### logout
+  # Logs the current user out and moves the connection into
+  # the 'unauthenticated' state.
+  #
   logout: defineCommand
     state: STATE_UNAUTH,
     command: 'LOGOUT',
@@ -304,7 +307,11 @@ exports.ImapClient = class ImapClient extends EventEmitter
       cb err, resp
 
 
-  #### Client Commands - Not Authenticated
+  # ## Client Commands - Not Authenticated
+  #
+  # ### starttls
+  # Attempts to negotiate a TLS secure connection with the current server.
+  #
   starttls: defineCommand
     state: STATE_UNAUTH,
     command: 'STARTTLS'
@@ -319,21 +326,36 @@ exports.ImapClient = class ImapClient extends EventEmitter
       @stream.on 'data', (d) => @_onData d
 
 
-  # @TODO
+  # ### authenticate
+  # Allows forms of authentication other than standard user/password
+  # TODO. Not implemented yet
+  #
   authenticate: defineCommand
     state: STATE_UNAUTH,
     command: 'AUTHENTICATE',
 
+  # ### login
+  # * *user*      - The username to use during authentication.
+  # * *password*  - The password for the given user.
+  #
+  # Authenticates with the server, given a username and password.
+  #
   login: defineCommand
     state: STATE_UNAUTH,
-    command: (user, pass) -> "LOGIN #{user} #{pass}"
+    command: (user, pass) -> "LOGIN \"#{user}\" \"#{pass}\""
     response: (err, resp, cb) ->
       if !err then @state = STATE_AUTH
       cb err, resp
 
 
 
-  #### Client Commands - Authenticated
+  # ## Client Commands - Authenticated
+  #
+  # ### select
+  # * *mailbox* - The mailbox to select.
+  #
+  # Chooses a mailbox as the current active mailbox.
+  # All commands available in the 'selected' state rely on this.
   #
   select: defineCommand
     state: STATE_AUTH,
@@ -342,71 +364,199 @@ exports.ImapClient = class ImapClient extends EventEmitter
       if not err then @state = STATE_SELECT
       cb err, resp
 
+  # ### examine
+  # * *mailbox* - The mailbox to examine.
+  #
+  # Retrieves information about a given mailbox,
+  # without requiring 'select'ing the box.
+  #
   examine: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "EXAMINE \"#{mailbox}\"",
 
+  # ### create
+  # * *mailbox* - The mailbox to create.
+  #
+  # Creates a mailbox with the given name.
+  #
   create: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "CREATE \"#{mailbox}\"",
 
+  # ### delete
+  # * *mailbox* - The mailbox to remove.
+  #
+  # Removes a mailbox with the given name.
+  #
   delete: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "DELETE \"#{mailbox}\"",
 
+  # ### rename
+  # * *mailbox* - The original mailbox name.
+  # * *newmailbox* - The new name for the mailbox.
+  #
+  # Renames a mailbox.
+  #
   rename: defineCommand
     state: STATE_AUTH,
     command: (mailbox, newmailbox) -> "RENAME \"#{mailbox}\" \"#{newmailbox}\"",
 
+  # ### subscribe
+  # * *mailbox* - The mailbox to subscribe to.
+  #
+  # Subscribes this account to a given mailbox.
+  # This is important for things like usenet and newsgroups.
+  #
   subscribe: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "SUBSCRIBE \"#{mailbox}\"",
 
+  # ### unsubscribe
+  # * *mailbox* - The mailbox to remove from subscriptions.
+  #
+  # Removes a mailbox from the list of subscribed boxes.
+  #
   unsubscribe: defineCommand
     state: STATE_AUTH,
     command: (mailbox) -> "UNSUBSCRIBE \"#{mailbox}\"",
 
+  # ### list
+  # * *refname* - The path to search for the mailboxes.
+  # * *mailbox* - The mailbox name to search for. Use '*' as a wildcard.
+  #
+  # Returns a list of accessible mailboxes, given the search parameters.
+  #
   list: defineCommand
     state: STATE_AUTH,
     command: (refname, mailbox) -> "LIST \"#{refname}\" \"#{mailbox}\"",
 
+  # ### lsub
+  # * *refname* - The path to search for the mailboxes.
+  # * *mailbox* - The mailbox name to search for. Use '*' as a wildcard.
+  #
+  # Returns a list of the mailboxes that are currently subscribed to, given params.
+  #
   lsub: defineCommand
     state: STATE_AUTH,
     command: (refname, mailbox) -> "LSUB \"#{refname}\" \"#{mailbox}\"",
 
+  # ### status
+  # * *mailbox* - The mailbox to check status on.
+  # * *items*   - An array of items to get status info for.
+  #               Items are 'MESSAGES', 'RECENT', 'UIDNEXT', 'UIDVALIDITY', 'UNSEEN'
+  #
+  # Gets status info for a mailbox.
+  # May take time, meant for use on non-selected mailbox.
+  #
   status: defineCommand
     state: STATE_AUTH,
     command: (mailbox, items) -> "STATUS \"#{mailbox}\" (#{items.join(' ')})",
 
+  # ### append
+  # * *mailbox*   - The mailbox to append the message to.
+  # * *message*   - A string with the message data.
+  # * *flags*     - The flags to set on the new email. (Optional)
+  # * *datetime*  - The internal date to use on the new message (Optional)
+  #
+  # Adds a new message to the mail server in the given mailbox.
+  #
   append: defineCommand
     state: STATE_AUTH,
-    command: (mailbox, flags, datetime, message) -> "APPEND \"#{mailbox}\" (#{flags.join(' ')}) #{datetime}{#{(new Buffer message, 'utf8').length}}",
+    command: (mailbox, message, flags, datetime) ->
+      flags ?= []
+      datetime ?= ''
+      "APPEND \"#{mailbox}\" (#{flags.join(' ')}) #{datetime}{#{(new Buffer message, 'utf8').length}}"
     continue: (resp, cb, arg..., message) -> cb message
 
 
-
-
-  #### Client Commands - Selected
+  # ## Client Commands - Selected
+  #
+  # ### check
+  # Triggers any server housekeeping that may be waiting such as disc flushes.
+  #
   check: defineCommand
     state: STATE_SELECT,
     command: "CHECK",
 
+  # ### close
+  # Unselects the currently selected mailbox.
+  #
   close: defineCommand
     state: STATE_SELECT,
     command: "CLOSE",
 
+  # ### expunge
+  # Permanently removes any messages with the '\Deleted' flag
+  #
   expunge: defineCommand
     state: STATE_SELECT,
     command: "EXPUNGE",
 
+  # ### search
+  # * *criteria*  - An array of search criteria.
+  # * *charset*   - The charset to use. (Optional)
+  # * *uid*       - Boolean indicating if results should be returned
+  #                 as a uid instead of sequence number.
+  #
+  # Searches the current mailbox using the given criteria, returning a list of
+  # ids for the matching messages.
+  #
+  # Criteria include:
+  #
+  # * A sequence set.
+  # * ALL, ANSWERED, DELETED, DRAFT, FLAGGED, NEW, OLD, RECENT, SEEN, UNANSWERED
+  # * UNDELETED, UNDRAFT, UNFLAGGED, UNSEEN
+  # * BCC|FROM|CC|TO < email address >
+  # * BEFORE|SENTBEFORE|SENTON|SENTSINCE|SINCE < rfc2822 date >
+  # * BODY|TEXT|SUBJECT
+  # * KEYWORD|UNKEYWORD < flag >
+  # * UID < sequence set >
+  # * LARGER|SMALLER < bytes >
+  # * HEADER < field > < str >
+  # * OR < crit 1 > < crit 2 >
+  # * NOT < crit >
+  #
   search: defineCommand
     state: STATE_SELECT,
-    command: (charset, criteria, uid) -> (if uid then 'UID ' else '') + "SEARCH #{"CHARSET " + charset if charset } #{criteria}",
+    command: (criteria, charset, uid) -> 
+      charset ?= ''
+      uid = 'UID ' if uid
+      uid + "SEARCH #{"CHARSET " + charset if charset } #{criteria}"
 
+  # ### fetch
+  # * *seqset*  - A sequence of messages to get.
+  # * *items*   - A array of items to get for each message.
+  #
+  # Fetches data about a set of messages.
+  #
+  # Items include:
+  #
+  # * ALL  - FLAGS, INTERNALDATE, RFC822.SIZE, ENVELOPE
+  # * FAST - FLAGS, INTERNALDATE, RFC822.SIZE
+  # * FULL - FLAGS, INTERNALDATE, RFC822.SIZE, ENVELOPE, BODY
+  # * BODY
+  # * BODY[section]<partial>
+  # * BODY.PEEK[section]<partial>
+  # * BODYSTRUCTURE
+  # * ENVELOPE
+  # * FLAGS
+  # * INTERNALDATE
+  # * RFC822, RFC822.HEADER, RFC822.SIZE, RFC822.TEXT
+  # * UID
   fetch: defineCommand
     state: STATE_SELECT,
-    command: (seqset, item_names, uid) -> (if uid then 'UID ' else '') + "FETCH #{seqset} #{item_names}",
+    command: (seqset, items, uid) -> (if uid then 'UID ' else '') + "FETCH #{seqset} #{items.join(' ')}",
 
+  # ### store
+  # * *seqset*  - The sequence set to operate one.
+  # * *action*  - The action to take ('+', '-', '')
+  # * *flags*   - The array of flags to add/remove/set
+  # * *uid*     - Should the sequence set interpret as a UID set.
+  #
+  # Given a set of flags, add then to messages, remove them from messages,
+  # or overwrite the current flags with the new set.
+  #
   store: defineCommand
     state: STATE_SELECT,
     command: (seqset, action, flags, uid) ->
@@ -417,6 +567,10 @@ exports.ImapClient = class ImapClient extends EventEmitter
 
       (if uid then 'UID ' else '') + "STORE #{seqset} #{act} (#{flags.join(' ')})"
 
+  # ### copy
+  # * *seqset*  - The sequence set to copy.
+  # * *mailbox* - The mailbox to copy to.
+  # * *uid*     - Interpret sequence as uids.
   copy: defineCommand
     state: STATE_SELECT,
     command: (seqset, mailbox, uid) -> (if uid then 'UID ' else '') + "COPY #{seqset} \"#{mailbox}\"",
