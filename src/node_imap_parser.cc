@@ -1,3 +1,9 @@
+/**
+ * imap-js - Copyright (c) 2011 Logan Falconer Smyth
+ *
+ * Dual licenses under MIT and GPL licenses.
+ * See MIT-LICENSE.txt and GPL-LICENSE.txt
+ */
 
 #include <v8.h>
 #include <node.h>

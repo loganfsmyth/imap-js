@@ -47,3 +47,9 @@ ImapClient(host, port, security, /* options*/ , cb)
 All IMAP commands are defined, and return properly, but character-set conversion 
 have not been implemented in most places. Because there is still work to be done
 at the lower level, the object-oriented wrappers remain as a TODO for the time being.
+
+# License
+
+Copyright (c) 2011 Logan Falconer Smyth
+Dual licensed under the MIT and GPL licenses.
+See MIT-LICENSE.txt and GPL-LICENSE.txt

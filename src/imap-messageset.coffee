@@ -1,3 +1,8 @@
+#
+# imap-js - Copyright (c) 2011 Logan Falconer Smyth
+#
+# Dual licensed under MIT and GPL licenses.
+# See MIT-LICENSE.txt and GPL-LICENSE.txt
 
 
 exports.MessageSet = class MessageSet
