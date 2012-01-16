@@ -1,5 +1,5 @@
 
-{EventEmitter} = require 'events'
+Stream = require 'stream'
 
 exports.STRING_QUOTED       = 0x00000001
 exports.STRING_LITERAL      = 0x00000002
@@ -17,20 +17,47 @@ exports.createTokenizer = (cb) ->
   return tok
 
 
-exports.Tokenizer = class Tokenizer extends EventEmitter
-  constructor: () ->
+exports.Tokenizer = class Tokenizer extends Stream
+  constructor: ->
     super()
     @token = null
     @match = null
     @literalsize = ''
     @literalbytes = 0
+    @writable = true
+    @writing = false
+    @destroyed = false
+
+  end: (str, encoding) ->
+    return if not @writable
+
+    @write str, encoding if str
+    @destroySoon()
+
+  destroySoon: ->
+    @writable = false
+
+    if not @writing and @token
+      @emit 'token',
+        type: @token | exports.TOKEN_END,
+        data: new Buffer(0)
+      @token = null
+
+    @destroy() if not @writing
+
+  destroy: ->
+    if not @destroyed
+      @writable = false
+      @destroyed = true
+      @emit 'close'
+
 
   write: (buffer, encoding) ->
     buffer = new Buffer(buffer, encoding) if not Buffer.isBuffer(buffer)
     pos = 0
+    @writing = true
 
-
-    while pos < buffer.length
+    while not @destroyed and pos < buffer.length
       if @match
         pos = @consumeMatch buffer, pos
 
@@ -62,6 +89,12 @@ exports.Tokenizer = class Tokenizer extends EventEmitter
             @token = exports.CRLF
           else
             pos = @emitString buffer, pos
+
+
+    @writing = false
+
+    if not @destroyed and not @writable
+      @destroySoon()
 
     return true
 

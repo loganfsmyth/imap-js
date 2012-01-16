@@ -41,8 +41,11 @@ var tests = {
         type: ch | s | e,
         data: ' ',
       }, {
-        type: atom | s | e,
+        type: atom | s,
         data: 'you'
+      }, {
+        type: atom | e,
+        data: ''
       }
     ]
   }
@@ -71,12 +74,11 @@ for (var name in tests) {
         for (var i = 0; i < t.strs.length; i++) {
           tok.write(t.strs[i], 'utf8');
         }
+        tok.end();
         test.done();
       }
     })(tests[name]);
   }
 }
-
-
 
 module.exports = testCase(cases);
