@@ -1,0 +1,82 @@
+
+var testCase = require('nodeunit').testCase;
+var tokenizer = require('../../lib/imap-tokenizer');
+var tok;
+
+var ch = tokenizer.STRING_CHAR;
+var atom = tokenizer.STRING_ATOM;
+
+var s = tokenizer.TOKEN_START;
+var e = tokenizer.TOKEN_END;
+
+var tests = {
+  basic: {
+    strs: ['* there hey', 'how are you'],
+    tokens: [
+      {
+        type: ch | s | e,
+        data: '*'
+      }, {
+        type: ch | s | e,
+        data: ' ',
+      }, {
+        type: atom | s | e,
+        data: 'there'
+      }, {
+        type: ch | s | e,
+        data: ' ',
+      }, {
+        type: atom | s,
+        data: 'hey'
+      }, {
+        type: atom | e,
+        data: 'how'
+      }, {
+        type: ch | s | e,
+        data: ' ',
+      }, {
+        type: atom | s | e,
+        data: 'are'
+      }, {
+        type: ch | s | e,
+        data: ' ',
+      }, {
+        type: atom | s | e,
+        data: 'you'
+      }
+    ]
+  }
+};
+
+cases = {
+  setUp: function(cb) {
+    tok = tokenizer.createTokenizer();
+    cb();
+  }
+}
+
+for (var name in tests) {
+  if (tests.hasOwnProperty(name)) {
+    cases[name] = (function(t) {
+      return function(test) {
+        var j = 0;
+
+        tok.on('token', function(token) {
+          test.equal(token.type, t.tokens[j].type, 'Token type at index ' + j);
+          test.equal(token.data, t.tokens[j].data, 'Token data at index ' + j);
+          j++;
+        });
+
+        test.expect(t.tokens.length * 2);
+        for (var i = 0; i < t.strs.length; i++) {
+          tok.write(t.strs[i], 'utf8');
+        }
+        test.done();
+      }
+    })(tests[name]);
+  }
+}
+
+
+
+module.exports = testCase(cases);

@@ -8,21 +8,27 @@ exports.STRING_CHAR         = 0x00000008
 exports.STRING_ATOM         = 0x00000010
 exports.CRLF                = 0x00000020
 
-exports.TOKEN_START         = 0x80000000
-exports.TOKEN_END           = 0x40000000
+exports.TOKEN_START         = 0x10000000
+exports.TOKEN_END           = 0x20000000
+
+exports.createTokenizer = (cb) ->
+  tok = new Tokenizer()
+  tok.on 'token', cb if cb
+  return tok
+
 
 exports.Tokenizer = class Tokenizer extends EventEmitter
-  constructor: (cb) ->
+  constructor: () ->
     super()
-    @on 'token', cb if cb
     @token = null
     @match = null
     @literalsize = ''
     @literalbytes = 0
 
   write: (buffer, encoding) ->
-    buffer = new Buffer(buffer, encoding) if encoding
+    buffer = new Buffer(buffer, encoding) if not Buffer.isBuffer(buffer)
     pos = 0
+
 
     while pos < buffer.length
       if @match
