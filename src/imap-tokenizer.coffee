@@ -68,6 +68,7 @@ exports.Tokenizer = class Tokenizer extends Stream
           when exports.STRING_LITERAL then @emitLiteral buffer, pos
           when exports.STRING_ATOM then @emitString buffer, pos
           when exports.CRLF
+            @token = null
             @emit 'token',
               type: exports.CRLF | exports.TOKEN_START | exports.TOKEN_END
               data: '\r\n'
@@ -193,17 +194,27 @@ exports.Tokenizer = class Tokenizer extends Stream
         @match = @match[i..]
         return buffer.length
       else if buffer[pos+i] != char.charCodeAt 0
-        err = new Error('Syntax error at "' + buffer[pos ...] + '"')
-        err.data = buffer
-        err.pos = pos
-        @emit 'error', err
+        @syntaxError buffer, pos
         return buffer.length
-
 
     len = @match.length
     @match = null
     return pos + len
 
+
+  syntaxError: (buffer, pos) ->
+    end = Math.min pos+10, buffer.length
+    start = Math.max 0, pos-10
+    prefix = buffer[start...pos]
+    suffix = pos + 1 == buffer.length and buffer[pos+1...end] or ''
+    c = buffer[pos...pos+1].toString().replace /\r/, (c) ->
+      code = c.charCodeAt(0)
+      '0x' + ((code < 16) and '0' or '') + code.toString(16)
+
+    err = new Error('Syntax error at "' + prefix + '^^' + c + '^^' + suffix + '"')
+    err.data = buffer
+    err.pos = pos
+    @emit 'error', err
 
 
 

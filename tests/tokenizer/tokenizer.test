@@ -5,48 +5,68 @@ var tok;
 
 var ch = tokenizer.STRING_CHAR;
 var atom = tokenizer.STRING_ATOM;
+var quoted = tokenizer.STRING_QUOTED;
+var crlf = tokenizer.CRLF;
 
 var s = tokenizer.TOKEN_START;
 var e = tokenizer.TOKEN_END;
+var se = s | e;
 
 var tests = {
   basic: {
     strs: ['* there hey', 'how are you'],
     tokens: [
-      {
-        type: ch | s | e,
-        data: '*'
-      }, {
-        type: ch | s | e,
-        data: ' ',
-      }, {
-        type: atom | s | e,
-        data: 'there'
-      }, {
-        type: ch | s | e,
-        data: ' ',
-      }, {
-        type: atom | s,
-        data: 'hey'
-      }, {
-        type: atom | e,
-        data: 'how'
-      }, {
-        type: ch | s | e,
-        data: ' ',
-      }, {
-        type: atom | s | e,
-        data: 'are'
-      }, {
-        type: ch | s | e,
-        data: ' ',
-      }, {
-        type: atom | s,
-        data: 'you'
-      }, {
-        type: atom | e,
-        data: ''
-      }
+      { type: ch | se,   data: '*' },
+      { type: ch | se,   data: ' ' },
+      { type: atom | se, data: 'there' },
+      { type: ch | se,   data: ' ' },
+      { type: atom | s,  data: 'hey' },
+      { type: atom | e,  data: 'how' },
+      { type: ch | se,   data: ' '},
+      { type: atom | se, data: 'are' },
+      { type: ch | se,   data: ' ' },
+      { type: atom | s,  data: 'you' },
+      { type: atom | e,  data: '' }
+    ]
+  },
+  fetch: {
+    strs: [
+      '* 2 FETCH (FLAGS (\\Seen) UID 123 BODY[1.4.HEADER.FIELDS ("H1" "H2")]<4> "HAHA")' + "\r\n",
+    ],
+    tokens: [
+      { type: ch | se,    data: '*' },
+      { type: ch | se,    data: ' ' },
+      { type: atom | se,  data: '2' },
+      { type: ch | se,    data: ' ' },
+      { type: atom | se,  data: 'FETCH' },
+      { type: ch | se,    data: ' ' },
+      { type: ch | se,    data: '(' },
+      { type: atom | se,  data: 'FLAGS' },
+      { type: ch | se,    data: ' ' },
+      { type: ch | se,    data: '(' },
+      { type: ch | se,    data: '\\' },
+      { type: atom | se,  data: 'Seen' },
+      { type: ch | se,    data: ')' },
+      { type: ch | se,    data: ' ' },
+      { type: atom | se,  data: 'UID' },
+      { type: ch | se,    data: ' ' },
+      { type: atom | se,  data: '123' },
+      { type: ch | se,    data: ' ' },
+      { type: atom | se,  data: 'BODY' },
+      { type: ch   | se,  data: '[' },
+      { type: atom | se,  data: '1.4.HEADER.FIELDS' },
+      { type: ch | se,    data: ' ' },
+      { type: ch   | se,  data: '(' },
+      { type: quoted | se,  data: 'H1' },
+      { type: ch | se,    data: ' ' },
+      { type: quoted | se,  data: 'H2' },
+      { type: ch   | se,  data: ')' },
+      { type: ch   | se,  data: ']' },
+      { type: atom | se,  data: '<4>' },
+      { type: ch | se,    data: ' ' },
+      { type: quoted | se,  data: 'HAHA' },
+      { type: ch | se,  data: ')' },
+      { type: crlf | se,  data: "\r\n" },
     ]
   }
 };
@@ -65,8 +85,13 @@ for (var name in tests) {
         var j = 0;
 
         tok.on('token', function(token) {
-          test.equal(token.type, t.tokens[j].type, 'Token type at index ' + j);
-          test.equal(token.data, t.tokens[j].data, 'Token data at index ' + j);
+          if (j >= t.tokens.length) {
+            test.ok(false, "Extra token emitted.");
+          }
+          else {
+            test.equal(token.type, t.tokens[j].type, 'Token type at index ' + j + ' Data: ' + t.tokens[j].data);
+            test.equal(token.data, t.tokens[j].data, 'Token data at index ' + j);
+          }
           j++;
         });
 
