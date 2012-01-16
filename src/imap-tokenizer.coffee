@@ -193,9 +193,10 @@ exports.Tokenizer = class Tokenizer extends Stream
         @match = @match[i..]
         return buffer.length
       else if buffer[pos+i] != char.charCodeAt 0
-        @emit 'error',
-          data: buffer
-          pos: pos
+        err = new Error('Syntax error at "' + buffer[pos ...] + '"')
+        err.data = buffer
+        err.pos = pos
+        @emit 'error', err
         return buffer.length
 
 
