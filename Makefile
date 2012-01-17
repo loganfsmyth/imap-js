@@ -6,6 +6,7 @@ COFFEE_SRC = \
   src/imap-messageset.coffee\
   src/imap-tokenizer.coffee \
   src/imap-token-parser.coffee \
+  src/async-parser.coffee   \
   src/imap-connection.coffee
 
 
