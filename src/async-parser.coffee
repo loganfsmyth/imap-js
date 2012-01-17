@@ -20,7 +20,8 @@ exports.Parser = class Parser extends Stream
       return if not result
 
       console.log 'Greeting:'
-      console.log result
+      console.log result.type
+      console.log result.text
 
       @emit 'greeting', result
 #      @response()
@@ -81,7 +82,7 @@ greeting = ->
 
   parts = [
     str('* '),
-    oneof('OK', 'PREAUTH', 'BYE'),
+    oneof(['OK', 'PREAUTH', 'BYE']),
     str(' '),
     resp_text(),
     crlf()
@@ -93,10 +94,27 @@ resp_text = ->
 
   n = text()
   y = parse [ bracket_wrap(resp_text_code), str(' '), n ]
+  y = zip ['text-code', null, 'text'], y
+  n = zip ['text'], n
 
   starts_with '[', y, n
 
 resp_text_code = ->
+  cb = route
+    'ALERT': null
+#    'BADCHARSET': process(char(' '), paren_list(astring)),
+#    'CAPABILITY': capability_data(),
+    'PARSE': null,
+#    'PERMANENTFLAGS': process(char(' '), paren_list(flag_perm)),
+    'READ-ONLY': null,
+    'READ-WRITE': null,
+    'TRYCREATE': null,
+#    'UIDNEXT': nz_number(),
+#    'UIDVALIDITY': nz_number(),
+#    'UNSEEN': nz_number(),
+#    '': 
+
+  zip ['key', 'value'], cb
 
 crlf = ->
   cb = parse [
@@ -137,12 +155,15 @@ text = ->
     return
 
 bracket_wrap = (cb) ->
-  parse [
+  wrap = parse [
     str('['),
     cb(),
     str(']')
   ]
-
+  
+  (data) ->
+    result = wrap data
+    result[1] if typeof result != 'undefined'
 
 l = (data) ->
   console.log data.buf[data.pos...]
@@ -153,12 +174,12 @@ l = (data) ->
 
 # Use one parser if the buffer starts with one char, and another if not
 starts_with = (c, y, n) ->
-  start = null
+  start = true
   found = null
   (data) ->
     if start
       start = false
-      found = data.buf[data.pos] == c.chatCodeAt 0
+      found = data.buf[data.pos] == c.charCodeAt 0
 
     if found
       y data
@@ -188,7 +209,7 @@ opt = (c) ->
       return ''
 
 
-oneof = (strs...) ->
+oneof = (strs) ->
   i = 0
   (data) ->
     for code in data.buf[data.pos...]
@@ -204,7 +225,21 @@ oneof = (strs...) ->
       throw new Error()
 
 
+route = (routes) ->
+  key_cb = oneof (k for own k,v of routes)
+  key = null
 
+  (data) ->
+    if not key
+      result = key_cb data
+      key = result if typeof result != 'undefined'
+    else if routes[key]
+      result = routes[key] data
+      if typeof result != 'undefined'
+        return [key, result]
+    else
+      return [ key, null ]
+    return
 
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
