@@ -336,7 +336,7 @@ space_list = (cb) ->
     return if typeof result == 'undefined'
     results.push result
     space = true
-
+    return
 
 nz_number = ->
   i = 0
