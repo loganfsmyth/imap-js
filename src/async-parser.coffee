@@ -158,7 +158,25 @@ string = ->
 
 
 quoted = ->
+  wrap '"', '"', quoted_inner
+
+quoted_inner = ->
   escaped = 0
+  col = collector()
+  (data) ->
+    for code,j in data.buf[data.pos...]
+      if escaped%2 == 1 or code == '\\'.charCodeAt 0
+        escaped += 1
+        continue
+
+      if code == '"'.charCodeAt 0
+        col data.buf[data.pos...data.pos+j]
+        data.pos += j
+        return col()
+
+    col data.buf[data.pos...]
+    data.pos = data.length
+
 
 
 literal = (emit) ->
