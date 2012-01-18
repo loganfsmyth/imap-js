@@ -119,9 +119,11 @@ resp_text = ->
 resp_text_code = ->
   space_num = pick 1, parse [str(' '), nz_number()]
   
+  badcharset = pick(1, parse([str(' '), paren_wrap(-> space_list(astring))]))
+
   zip ['key', 'value'], route
     'ALERT': null
-    'BADCHARSET': pick(1, parse([str(' '), paren_wrap(-> space_list(astring))])),
+    'BADCHARSET': lookup({' ': (-> badcharset), '':empty}),
 #    'CAPABILITY': capability_data(),
     'PARSE': null,
 #    'PERMANENTFLAGS': process(char(' '), paren_list(flag_perm)),
@@ -132,6 +134,9 @@ resp_text_code = ->
     'UIDVALIDITY': space_num,
     'UNSEEN': space_num,
 #    '': 
+
+empty = ->
+  (data) -> []
 
 astring = ->
   lookup {
