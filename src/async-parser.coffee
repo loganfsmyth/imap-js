@@ -48,10 +48,11 @@ exports.Parser = class Parser extends Stream
       pos: 0
 
     while not @destroyed and data.pos < buffer.length
+      #@parser data
       try
         @parser data
       catch e
-        throw e if not e instanceof SyntaxError
+        throw e if e not instanceof SyntaxError
         console.log e.toString()
         #@emit 'error', e
         @destroy()
@@ -98,16 +99,13 @@ class SyntaxError extends Error
       (" " for i in [0...pos]).join('') + "^\n"
 
 greeting = ->
-
-  parts = [
+  zip [ null, 'type', null, 'text'], parse [
     str('* '),
     oneof(['OK', 'PREAUTH', 'BYE']),
     str(' '),
     resp_text(),
     crlf()
   ]
-
-  zip [null, 'type', null, 'text'], parse parts
 
 resp_text = ->
 
@@ -119,32 +117,234 @@ resp_text = ->
   starts_with '[', y, n
 
 resp_text_code = ->
-  cb = route
+  space_num = pick 1, parse [str(' '), nz_number()]
+  
+  zip ['key', 'value'], route
     'ALERT': null
-#    'BADCHARSET': process(char(' '), paren_list(astring)),
+    'BADCHARSET': pick(1, parse([str(' '), paren_wrap(-> space_list(astring))])),
 #    'CAPABILITY': capability_data(),
     'PARSE': null,
 #    'PERMANENTFLAGS': process(char(' '), paren_list(flag_perm)),
     'READ-ONLY': null,
     'READ-WRITE': null,
     'TRYCREATE': null,
-#    'UIDNEXT': nz_number(),
-#    'UIDVALIDITY': nz_number(),
-#    'UNSEEN': nz_number(),
+    'UIDNEXT': space_num,
+    'UIDVALIDITY': space_num,
+    'UNSEEN': space_num,
 #    '': 
 
-  zip ['key', 'value'], cb
+astring = ->
+  lookup {
+    '{': string,
+    '"': string,
+    '': astring_str,
+  }
 
-crlf = ->
-  cb = parse [
-    opt("\r"),
-    str("\n")
-  ]
+lookup = (map) ->
+  handler = null
+  (data) ->
+    if not handler
+      c = String.fromCharCode data.buf[data.pos]
+      handler = if map[c] then map[c]() else map['']()
+    handler data
+
+string = ->
+  lookup {
+    '{': literal,
+    '"': quoted,
+    '': (data) ->
+      err data, 'string', 'Expected a { or " at the start of the string.'
+  }
+
+
+quoted = ->
+  escaped = 0
+
+
+literal = (emit) ->
+  size = literal_size()
+  nl = crlf()
+  dat = null
+  length = 0
+  (data) ->
+    if size
+      result = size data
+      return if typeof result == 'undefined'
+      length = result
+      size = null
+      dat = literal_data length, emit
+
+    if nl
+      result = nl data
+      return if typeof result == 'undefined'
+      nl = null
+
+    result = dat data
+    return result if typeof result != 'undefined'
+
+literal_size = ->
+  curly_wrap number
+
+literal_data = (size, emit) ->
+  buffers = [] if not emit
+  remaining = size
+  (data) ->
+    len = Math.min data.buf.length - data.pos, size
+    remaining -= len
+    buf = data.buf[data.pos...data.pos+len]
+    data.pos += len
+    for code in buf
+      if code not in [0x01..0xFF]
+        err data, 'literal_data', 'Literals can only bytes between 1 and 255'
+
+    if not emit
+      buffers.push buf
+      if remaining == 0
+        all = new Buffer size
+        pos = 0
+        for b in buffers
+          b.copy all, pos
+          pos += b.length
+        return all
+    else
+      emit buf
+      if remailing == 0
+        return true
+
+astring_str = ->
+  col = collector()
+  chars = astring_chars()
+  i = 0
+  (data) ->
+    for code, j in data.buf[data.pos...]
+      if code not in chars
+        if i == 0
+          err data, 'astring_str', 'astring character expected'
+        col data.buf[data.pos...data.pos+j]
+        data.pos += j
+        return col()
+      i += 1
+
+
+    col data.buf[data.pos...]
+    data.pos = data.length
+
+
+collector = ->
+  buffers = []
+  length = 0
+  (b) ->
+    if not b
+      if length == 0
+        return null
+      if buffers.length == 1
+        all = buffers[0]
+      else
+        all = new Buffer length
+        pos = 0
+        for buf in buffers
+          buf.copy all, pos
+          pos += buf.length
+      buffers = []
+      return all
+    else
+      length += b.length
+      buffers.push b
+    return
+
+list_wildcards = do -> 
+  b = new Buffer '%*'
+  -> b
+
+quoted_specials = do ->
+  b = new Buffer '"\\'
+  -> b
+
+resp_specials = do ->
+  b = new Buffer ']'
+  -> b
+
+ctl = do ->
+  chars = [0x00..0x1F]
+  chars.push 0x7F
+  b = new Buffer chars
+  chars = null
+  -> b
+
+atom_specials = do ->
+  col = collector()
+  col new Buffer '(){ '
+  col list_wildcards()
+  col quoted_specials()
+  col resp_specials()
+  col ctl()
+  b = col()
+  col = null
+  -> b
+
+atom_chars = do ->
+  b = new Buffer (c for c in [0x01..0x7F] when c not in atom_specials())
+  -> b
+
+astring_chars = do ->
+  ac = atom_chars()
+  rs = resp_specials()
+  b = new Buffer ac.length + rs.length
+  ac.copy b, 0
+  rs.copy b, ac.length
+  -> b
+
+space_list = (cb) ->
+  results = []
+  handler = cb()
+  space = true
 
   (data) ->
-    result = cb data
-    if typeof result != 'undefined'
-      return result.join('')
+    if not results.length
+      result = handler data
+      return if typeof result == 'undefined'
+      results.push result
+      return
+
+    if space
+      if data.buf[data.pos] != ' '.charCodeAt 0
+        return results
+      space = false
+      data.pos += 1
+      handler = cb()
+      return
+
+    result = handler data
+    return if typeof result == 'undefined'
+    results.push result
+    space = true
+
+
+nz_number = ->
+  i = 0
+  str = ''
+  (data) ->
+    for code in data.buf[data.pos...]
+      if i == 0 and code not in [ 0x31 .. 0x39 ]
+        err data, 'nz_number', 'First digit must be between 1 and 9'
+      if code not in [ 0x30 .. 0x39 ]
+        return parseInt str, 10
+      data.pos += 1
+      i += 1
+      str += String.fromCharCode code
+
+number = ->
+  i = 0
+  str = ''
+  (data) ->
+    for code in data.buf[data.pos...]
+      if code not in [ 0x30 .. 0x39 ]
+        if i == 0 then err data, 'nz_number', 'First digit must be between 1 and 9'
+        else return parseInt str, 10
+      data.pos += 1
+      i += 1
+      str += String.fromCharCode code
+
 
 text = ->
   cr = "\r".charCodeAt 0
@@ -173,16 +373,23 @@ text = ->
     data.pos = data.buf.length
     return
 
-bracket_wrap = (cb) ->
-  wrap = parse [
-    str('['),
-    cb(),
-    str(']')
+
+crlf = ->
+  join parse [
+    opt("\r"),
+    str("\n")
   ]
-  
-  (data) ->
-    result = wrap data
-    result[1] if typeof result != 'undefined'
+
+
+
+bracket_wrap = (cb) ->
+  wrap '[', ']', cb
+
+paren_wrap = (cb) ->
+  wrap '(', ')', cb
+
+curly_wrap = (cb) ->
+  wrap '{', '}', cb
 
 l = (data) ->
   console.log data.buf[data.pos...]
@@ -228,8 +435,25 @@ opt = (c) ->
     else
       return ''
 
+each = (ea, cb) ->
+  (data) ->
+    results = cb data
+    (ea v for v in results) if typeof results != 'undefined'
+
+wrap = (open, close, cb) ->
+  pick 1, parse [
+    str(open),
+    cb(),
+    str(close),
+  ]
+
 err = (data, rule, extra) ->
   throw new SyntaxError data, rule, extra
+
+join = (cb) ->
+  (data) ->
+    result = cb data
+    return result.join '' if typeof result != 'undefined'
 
 oneof = (strs) ->
   matches = strs
@@ -241,13 +465,17 @@ oneof = (strs) ->
       data.pos += 1
       if not matches.length or matches.length == 1 and matches[0].length == i
         break
-    console.log matches
 
     if matches.length == 1 and matches[0].length == i
       return matches[0]
     else if matches.length == 0
       err data, 'oneof', 'No matches in ' + strs.join(',')
 
+pick = (ids, cb) ->
+  (data) ->
+    result = cb data
+    return if typeof result == 'undefined'
+    return if typeof ids == 'number' then result[ids] else (result[i] for i in ids)
 
 route = (routes) ->
   key_cb = oneof (k for own k,v of routes)
