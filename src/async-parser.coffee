@@ -48,7 +48,13 @@ exports.Parser = class Parser extends Stream
       pos: 0
 
     while not @destroyed and data.pos < buffer.length
-      @parser data
+      try
+        @parser data
+      catch e
+        throw e if not e instanceof SyntaxError
+        console.log e.toString()
+        #@emit 'error', e
+        @destroy()
 
     @writing = false
 
@@ -77,6 +83,19 @@ exports.Parser = class Parser extends Stream
     return
 
 
+class SyntaxError extends Error
+  constructor: (data, rule = '', extra = '') ->
+    context = 10
+    @name = "IMAPSyntaxError"
+    {pos, buf} = data
+
+    start = Math.max pos - context, 0
+    end = Math.min pos + context, buf.length
+
+    error = pos - start
+
+    @message = rule + (extra and "\n" + extra) + "\n==" + buf.toString('ascii', start, end) + "==\n  " +
+      (" " for i in [0...pos]).join('') + "^\n"
 
 greeting = ->
 
@@ -192,12 +211,13 @@ str = (s) ->
   i = 0
   (data) ->
     {pos, buf} = data
-    while pos + i < buf.length and i < buffer.length
-      throw new Error() if buf[pos+i] != buffer[i]
+    while pos < buf.length and i < buffer.length
+      err data, 'str', 'failed to match ' + s if buf[pos] != buffer[i]
       i += 1
+      pos += 1
+    data.pos = pos
 
     if i == buffer.length
-      data.pos += i
       return s
 
 opt = (c) ->
@@ -208,21 +228,25 @@ opt = (c) ->
     else
       return ''
 
+err = (data, rule, extra) ->
+  throw new SyntaxError data, rule, extra
 
 oneof = (strs) ->
+  matches = strs
   i = 0
   (data) ->
     for code in data.buf[data.pos...]
-      strs = (str for str in strs when str[i].charCodeAt(0) == code)
+      matches = (str for str in matches when str[i].charCodeAt(0) == code)
       i += 1
-      if not strs.length or strs.length == 1 and strs[0].length == i
+      data.pos += 1
+      if not matches.length or matches.length == 1 and matches[0].length == i
         break
+    console.log matches
 
-    if strs.length == 1 and strs[0].length == i
-      data.pos += i
-      return strs[0]
-    else if strs.length == 0
-      throw new Error()
+    if matches.length == 1 and matches[0].length == i
+      return matches[0]
+    else if matches.length == 0
+      err data, 'oneof', 'No matches in ' + strs.join(',')
 
 
 route = (routes) ->
