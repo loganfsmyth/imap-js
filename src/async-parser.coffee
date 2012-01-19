@@ -124,9 +124,9 @@ resp_text_code = ->
   zip ['key', 'value'], route
     'ALERT': null
     'BADCHARSET': lookup({' ': (-> badcharset), '':empty}),
-#    'CAPABILITY': capability_data(),
+    'CAPABILITY': pick(1, parse([str(' '), capability_data()])),
     'PARSE': null,
-#    'PERMANENTFLAGS': process(char(' '), paren_list(flag_perm)),
+    'PERMANENTFLAGS': pick(1, parse([str(' '), space_list(flag_perm)])),
     'READ-ONLY': null,
     'READ-WRITE': null,
     'TRYCREATE': null,
@@ -134,6 +134,36 @@ resp_text_code = ->
     'UIDVALIDITY': space_num,
     'UNSEEN': space_num,
 #    '': 
+
+flag_perm = ->
+
+  slash_flags = lookup
+    '*': -> str('*')
+    '': -> atom()
+
+  lookup
+    '\\': -> join(parse([str('\\'), slash_flags]))
+    '': atom
+
+
+capability_data = ->
+  space_list capability
+
+capability = ->
+  atom()
+
+atom = ->
+  col = collector()
+  (data) ->
+    for code, i in data.buf[data.pos...]
+      if code not in atom_chars()
+        col data.buf[data.pos..data.pos+i]
+        data.pos += i
+        return col()
+
+    col data.buf[data.pos...]
+    data.pos = data.length
+      
 
 empty = ->
   (data) -> []
