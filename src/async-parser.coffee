@@ -119,11 +119,11 @@ resp_text = ->
 resp_text_code = ->
   space_num = pick 1, parse [str(' '), nz_number()]
   
-  badcharset = pick(1, parse([str(' '), paren_wrap(-> space_list(astring))]))
+  badcharset = -> pick(1, parse([str(' '), paren_wrap(-> space_list(astring))]))
 
   zip ['key', 'value'], route
     'ALERT': null
-    'BADCHARSET': lookup({' ': (-> badcharset), '':empty}),
+    'BADCHARSET': lookup({' ': badcharset, '':empty}),
     'CAPABILITY': pick(1, parse([str(' '), capability_data()])),
     'PARSE': null,
     'PERMANENTFLAGS': pick(1, parse([str(' '), space_list(flag_perm)])),
