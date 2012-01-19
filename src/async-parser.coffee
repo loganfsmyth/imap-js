@@ -118,10 +118,9 @@ resp_text = ->
 
 resp_text_code = ->
   space_num = pick 1, parse [str(' '), nz_number()]
-  
   badcharset = -> pick(1, parse([str(' '), paren_wrap(-> space_list(astring))]))
 
-  zip ['key', 'value'], route
+  zip ['key', 'value'], route {
     'ALERT': null
     'BADCHARSET': lookup({' ': badcharset, '':empty}),
     'CAPABILITY': pick(1, parse([str(' '), capability_data()])),
@@ -133,10 +132,29 @@ resp_text_code = ->
     'UIDNEXT': space_num,
     'UIDVALIDITY': space_num,
     'UNSEEN': space_num,
-#    '': 
+  }, parse([atom(), lookup({' ': atom_args, '': empty  })])
+
+textchar_str = () ->
+  col = collector()
+  (data) ->
+    for code, i in data.buf[data.pos...]
+      if code not in text_chars() or code == ']'.charCodeAt 0
+        col data.buf[data.pos...data.pos+i]
+        data.pos += i
+        all = col()
+
+        return all if all
+
+        err data, 'textchar_str', 'textchar_strings must have at least one value'
+
+    col data.buf[data.pos...]
+    data.pos = data.length
+
+
+atom_args = ->
+  pick(1, parse([str(' '), textchar_str()]))
 
 flag_perm = ->
-
   slash_flags = lookup
     '*': -> str('*')
     '': -> atom()
@@ -166,7 +184,6 @@ atom = ->
 
     col data.buf[data.pos...]
     data.pos = data.length
-      
 
 empty = ->
   (data) -> []
@@ -350,6 +367,10 @@ astring_chars = do ->
   rs.copy b, ac.length
   -> b
 
+text_chars = do ->
+  b = new Buffer (c for c in [0x01..0x7F] when c != 10 and c != 13) # all except \r and \n
+  -> b
+
 space_list = (cb) ->
   results = []
   handler = cb()
@@ -511,7 +532,7 @@ join = (cb) ->
     result = cb data
     return result.join '' if typeof result != 'undefined'
 
-oneof = (strs) ->
+oneof = (strs, nomatch) ->
   matches = strs
   i = 0
   (data) ->
@@ -525,7 +546,9 @@ oneof = (strs) ->
     if matches.length == 1 and matches[0].length == i
       return matches[0]
     else if matches.length == 0
-      err data, 'oneof', 'No matches in ' + strs.join(',')
+      data.pos -= 1 # TODO this will break w/ more than 1 char per buffer
+      if not nomatch then err data, 'oneof', 'No matches in ' + strs.join(',')
+      else return null
 
 pick = (ids, cb) ->
   (data) ->
@@ -533,14 +556,18 @@ pick = (ids, cb) ->
     return if typeof result == 'undefined'
     return if typeof ids == 'number' then result[ids] else (result[i] for i in ids)
 
-route = (routes) ->
-  key_cb = oneof (k for own k,v of routes)
+route = (routes, nomatch) ->
+  key_cb = oneof (k for own k,v of routes), nomatch
   key = null
 
   (data) ->
-    if not key
+    if not key_cb
+      return nomatch data
+    else if not key
       result = key_cb data
       key = result if typeof result != 'undefined'
+      if result == null
+        key_cb = null
     else if routes[key]
       result = routes[key] data
       if typeof result != 'undefined'
