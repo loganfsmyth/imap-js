@@ -157,9 +157,12 @@ atom = ->
   (data) ->
     for code, i in data.buf[data.pos...]
       if code not in atom_chars()
-        col data.buf[data.pos..data.pos+i]
+        col data.buf[data.pos...data.pos+i]
         data.pos += i
-        return col()
+        
+        all = col()
+        return all if all
+        err data, 'atom', 'atom must contain at least one character'
 
     col data.buf[data.pos...]
     data.pos = data.length
