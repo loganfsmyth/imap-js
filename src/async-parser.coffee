@@ -118,9 +118,6 @@ exports.SyntaxError = class SyntaxError extends Error
       "==" + buf.toString('utf8', start, end) + "==\n" +
       "  " + (" " for i in [0...pos]).join('') + "^\n"
 
-response = ->
-  ->
-    (data) ->
 
 
 ifset = (c, cb) ->
@@ -134,15 +131,15 @@ ifset = (c, cb) ->
       handler data
 
 resp_text_code = ->
-  space_num = pick 1, parse [str(' '), nz_number()]
-  badcharset = pick(1, parse([str(' '), paren_wrap(space_list(astring()))]))
+  space_num = parse [str(' '), nz_number()], 1
+  badcharset = parse [str(' '), paren_wrap(space_list(astring()))], 1
 
   zip ['key', 'value'], route {
     'ALERT': null
     'BADCHARSET': lookup({ ' ': badcharset, '': empty() }),
-    'CAPABILITY': pick(1, parse([str(' '), capability_data()])),
+    'CAPABILITY': parse([str(' '), capability_data()], 1),
     'PARSE': null,
-    'PERMANENTFLAGS': pick(1, parse([str(' '), paren_wrap(space_list(flag_perm(), true))])),
+    'PERMANENTFLAGS': parse([str(' '), paren_wrap(space_list(flag_perm(), true))], 1),
     'READ-ONLY': null,
     'READ-WRITE': null,
     'TRYCREATE': null,
@@ -176,7 +173,7 @@ textchar_str = ->
 
 
 atom_args = ->
-  pick(1, parse([str(' '), textchar_str()]))
+  parse [str(' '), textchar_str()], 1
 
 flag_perm = ->
   slash_flags = lookup
@@ -553,11 +550,11 @@ opt = (c) ->
         return new Buffer 0
 
 wrap = (open, close, cb) ->
-  pick 1, parse [
+  parse [
     str(open),
     cb,
     str(close),
-  ]
+  ], 1
 
 err = (data, rule, extra) ->
   throw new SyntaxError data, rule, extra
@@ -593,14 +590,6 @@ oneof = (strs, nomatch) ->
         if not nomatch then err data, 'oneof', 'No matches in ' + strs.join(',')
         else return null
 
-pick = (ids, cb) ->
-  ->
-    data_cb = cb()
-    (data) ->
-      result = data_cb data
-      return if typeof result == 'undefined'
-      return if typeof ids == 'number' then result[ids] else (result[i] for i in ids)
-
 route = (routes, nomatch) ->
   key_cb = oneof (k for own k,v of routes), nomatch
   ->
@@ -629,7 +618,7 @@ route = (routes, nomatch) ->
 
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
-parse = (parts) ->
+parse = (parts, ids) ->
   ->
     i = 0
     handler = parts[i]()
@@ -640,7 +629,13 @@ parse = (parts) ->
 
       ret.push result
       i += 1
-      return ret if parts.length == i
+      if parts.length == i
+        return if typeof ids == 'undefined'
+          ret
+        else if typeof ids == 'number'
+          ret[ids]
+        else
+          (ret[j] for j in ids)
       handler = parts[i]()
       return
 
@@ -661,7 +656,7 @@ zip = (keys, cb) ->
 
 
 greeting = do ->
-  text_code = pick 0, parse [ bracket_wrap(resp_text_code()), str(' ')]
+  text_code = parse [ bracket_wrap(resp_text_code()), str(' ') ], 0
 
   zip [ null, 'type', null, 'text-code', 'text'], parse [
     str('* '),
@@ -671,3 +666,10 @@ greeting = do ->
     text(),
     crlf()
   ]
+
+
+
+response = do ->
+  ->
+    (data) ->
+
