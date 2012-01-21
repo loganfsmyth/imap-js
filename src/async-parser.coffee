@@ -138,11 +138,6 @@ response = ->
     '': response_tagged()
 
 
-
-continue_req = ->
-response_untagged = ->
-
-
 response_tagged = ->
   cb = series [
     tag()
@@ -161,6 +156,48 @@ response_tagged = ->
     cb
   ]
 
+continue_req = ->
+
+response_untagged = ->
+  cb = series [
+    str '* '
+    response_data_types()
+    crlf()
+  ], 1
+
+  series [
+    -> (data) -> 'tagged'
+    cb
+  ]
+
+response_data_types = ->
+  resp_text = series [
+    str ' '
+    ifset '[', text_code()
+    text()
+  ], [1,2]
+
+  route {
+# cond-state
+    "OK": resp_text
+    "NO": resp_text
+    "BAD": resp_text
+# cond-bye
+    "BYE": resp_text
+#mailbox-data
+    "FLAGS": null
+    "LIST": null
+    "LSUB": null
+    "SEARCH": ifset ' ', series([ str(' '), space_list(number(true)) ], 1)
+    "STATUS": null
+    # number EXISTS | RECENT
+#message-data
+    # nz-number EXPUNGE | FETCH msg-att
+# capability-data
+    "CAPABILITY": capability_args()
+  }
+
+
 tag = ->
   chars = astring_chars()
   collect_until -> (data) ->
@@ -170,14 +207,14 @@ tag = ->
 resp_text_code = ->
   space_num           = series [ str(' '), number true ], 1
   badcharset_args     = series [ str(' '), paren_wrap space_list astring() ], 1
-  capability_args     = series [ str(' '), capability_data() ], 1
+
   permanentflags_args = series [ str(' '), paren_wrap space_list(flag_perm(), true) ], 1
   atom_args           = series [ str(' '), textchar_str() ], 1
 
   text_codes = route
     'ALERT':          null
     'BADCHARSET':     lookup({ ' ': badcharset_args, '': empty_resp() })
-    'CAPABILITY':     capability_args
+    'CAPABILITY':     capability_args()
     'PARSE':          null
     'PERMANENTFLAGS': permanentflags_args
     'READ-ONLY':      null
@@ -204,6 +241,9 @@ flag_perm = ->
   lookup
     '\\': join series [str('\\'), slash_flags]
     '': atom()
+
+capability_args = ->
+  series [ str(' '), capability_data() ], 1
 
 capability_data = ->
   space_list capability()
