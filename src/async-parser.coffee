@@ -31,8 +31,7 @@ exports.Parser = class Parser extends Stream
       return if not result
 
       console.log 'Greeting:'
-      console.log result.type
-      console.log result.text
+      console.log result
 
       @emit 'greeting', result
       @_response()
@@ -114,22 +113,24 @@ class SyntaxError extends Error
 response = ->
 
 greeting = ->
-  zip [ null, 'type', null, 'text'], parse [
+  text_code = pick 0, parse [ bracket_wrap(resp_text_code), str(' ')]
+
+  zip [ null, 'type', null, 'text-code', 'text'], parse [
     str('* '),
     oneof(['OK', 'PREAUTH', 'BYE']),
     str(' '),
-    resp_text(),
+    ifset('[', text_code),
+    text(),
     crlf()
   ]
 
-resp_text = ->
-
-  n = text()
-  y = parse [ bracket_wrap(resp_text_code), str(' '), n ]
-  y = zip ['text-code', null, 'text'], y
-  n = zip ['text'], parse [ n ]
-
-  starts_with '[', y, n
+ifset  = (c, cb) ->
+  found = false
+  (data) ->
+    if not found
+      found = true
+      return null if data.buf[data.pos] != c.charCodeAt 0
+    cb data
 
 resp_text_code = ->
   space_num = pick 1, parse [str(' '), nz_number()]
