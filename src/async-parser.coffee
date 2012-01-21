@@ -205,7 +205,114 @@ response_data_types = ->
     # nz-number EXPUNGE | FETCH msg-att
 # capability-data
     "CAPABILITY": capability_args()
-  }
+  }, response_numeric_types()
+
+response_numeric_types = ->
+  types = route
+    'EXISTS': null
+    'RECENT': null
+    'EXPUNGE': null
+    'FETCH': series [ str(' '), msg_att() ], 1
+  series [
+    number()
+    str ' '
+    types
+  ], [0, 2]
+
+sp = -> str ' '
+
+msg_att = ->
+
+  paren_wrap space_list route
+    'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), true)) ], 1
+    'ENVELOPE': series [ sp(), envelope() ], 1
+    'INTERNALDATE': series [ sp(), date_time() ], 1
+    'RFC822': series [ sp(), nstring() ], 1
+    'RFC822.HEADER': series [ sp(), nstring() ], 1
+    'RFC822.TEXT': series [ sp(), nstring() ], 1
+    'RFC822.SIZE': series [ sp(), number() ], 1
+    'BODYSTRUCTURE': series [ sp(), body() ], 1
+    'BODY': starts_with 'S', series([ str('STRUCTURE'), sp(), body() ]), series([ section(), starts_with('<', wrap('<', '>', number()), null_resp()), sp(), nstring() ])
+    'UID': series [ str(' '), uniqueid() ], 1
+
+envelope = ->
+  cb = paren_wrap series [
+    env_date(),       sp()
+    env_subject(),    sp()
+    env_from(),       sp()
+    env_sender(),     sp()
+    env_reply_to(),   sp()
+    env_to(),         sp()
+    env_cc(),         sp()
+    env_bcc(),        sp()
+    env_in_reply_to(),sp()
+    env_message_id()
+  ]
+
+  zip [
+    'date',     null
+    'subject',  null
+    'from',     null
+    'sender',   null
+    'reply-to', null
+    'to',       null
+    'cc',       null
+    'bcc',      null
+    'in-reply-to', null
+    'message-id'
+  ], cb
+
+env_date = env_subject = env_message_id = env_in_reply_to = ->
+  nstring()
+
+env_from = env_sender = env_reply_to = env_to = env_cc = env_bcc = ->
+  starts_with 'N',
+    nil(),
+    paren_wrap space_list address()
+
+
+
+date_time = ->
+  series [
+    str '"'
+    starts_with ' ', series([sp(), digit()]), series([digit(), digit()])
+    str '-'
+    oneof ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    str '-'
+    join series [digit(), digit(), digit(), digit()]
+    sp()
+    time()
+    sp()
+    zone()
+    str '"'
+  ]
+time = ->
+  join series [
+    join series [digit(), digit()]
+    str ':'
+    join series [digit(), digit()]
+    str ':'
+    join series [digit(), digit()]
+  ]
+zone = ->
+  join series [ oneof(['-', '+']), digit(), digit(), digit(), digit() ]
+
+nstring = ->
+  starts_with 'N', nil(), string()
+
+address = ->
+  -> (data) ->
+
+digit = ->
+
+
+body = ->
+  
+
+section = ->
+
+uniqueid = ->
+  number(true)
 
 flag_list = ->
   paren_wrap space_list flag(), true
@@ -601,7 +708,7 @@ ifset = (c, cb) ->
   starts_with c, cb, null_resp()
 
 space_list = (cb, none) ->
-  sp = ' '.charCodeAt 0
+  spcode = ' '.charCodeAt 0
   paren = ')'.charCodeAt 0
   ->
     results = []
@@ -619,7 +726,7 @@ space_list = (cb, none) ->
         return
 
       if space
-        if data.buf[data.pos] != sp
+        if data.buf[data.pos] != spcode
           console.log results
           return results
         space = false
