@@ -118,6 +118,54 @@ exports.SyntaxError = class SyntaxError extends Error
       "==" + buf.toString('utf8', start, end) + "==\n" +
       "  " + (" " for i in [0...pos]).join('') + "^\n"
 
+greeting = ->
+  zip [ null, 'type', null, 'text-code', 'text'], series [
+    str('* '),
+    oneof(['OK', 'PREAUTH', 'BYE']),
+    str(' '),
+    ifset('[', text_code()),
+    text(),
+    crlf()
+  ]
+
+text_code = ->
+  series [ bracket_wrap(resp_text_code()), str(' ') ], 0
+
+response = ->
+  zip ['type', 'response'], lookup
+    '+': continue_req()
+    '*': response_untagged() # or response-fatal
+    '': response_tagged()
+
+
+
+continue_req = ->
+response_untagged = ->
+
+
+response_tagged = ->
+  cb = series [
+    tag()
+    str ' '
+    oneof ['OK', 'PREAUTH', 'BYE']
+    str ' '
+    ifset '[', text_code()
+    text()
+    crlf()
+  ]
+
+  cb = zip ['tag', null, 'type', null, 'text-code', 'text'], cb
+
+  series [
+    -> (data) -> 'tagged'
+    cb
+  ]
+
+tag = ->
+  chars = astring_chars()
+  collect_until -> (data) ->
+    for code, i in data.buf[data.pos...]
+      return i if code not in chars
 
 resp_text_code = ->
   space_num           = series [ str(' '), number true ], 1
@@ -178,6 +226,40 @@ curly_wrap    = (cb) -> wrap '{', '}', cb
 
 ###################### Data Type helpers ###############
 
+astring = ->
+  lookup {
+    '{': string(),
+    '"': string(),
+    '': astring_str(),
+  }
+
+number = (nz) ->
+  ->
+    i = 0
+    str = ''
+    first_range = nz and [ 0x31 .. 0x39 ] or [ 0x30 .. 0x39 ]
+    (data) ->
+      for code in data.buf[data.pos...]
+        if i == 0 and code not in first_range
+          err data, 'number', 'First digit must be between #{if nz then 1 else 0} and 9'
+        if code not in [ 0x30 .. 0x39 ]
+          return parseInt str, 10
+        data.pos += 1
+        i += 1
+        str += String.fromCharCode code
+
+string = ->
+  lookup {
+    '{': literal(),
+    '"': quoted(),
+    '': ->
+      (data) ->
+        err data, 'string', 'Expected a { or " at the start of the string.'
+  }
+
+quoted = ->
+  wrap '"', '"', quoted_inner()
+
 collect_until = (cb, none) ->
   (arg)->
     col = collector()
@@ -208,12 +290,6 @@ atom = ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
 
-astring = ->
-  lookup {
-    '{': string(),
-    '"': string(),
-    '': astring_str(),
-  }
 
 text = ->
   cr = "\r".charCodeAt 0
@@ -222,34 +298,6 @@ text = ->
     for code, i in data.buf[data.pos...]
       return i if code in [cr, lf]
 
-number = (nz) ->
-  ->
-    i = 0
-    str = ''
-    first_range = nz and [ 0x31 .. 0x39 ] or [ 0x30 .. 0x39 ]
-    (data) ->
-      for code in data.buf[data.pos...]
-        if i == 0 and code not in first_range
-          err data, 'number', 'First digit must be between #{if nz then 1 else 0} and 9'
-        
-        if code not in [ 0x30 .. 0x39 ]
-          return parseInt str, 10
-        data.pos += 1
-        i += 1
-        str += String.fromCharCode code
-
-string = ->
-  lookup {
-    '{': literal(),
-    '"': quoted(),
-    '': ->
-      (data) ->
-        err data, 'string', 'Expected a { or " at the start of the string.'
-  }
-
-
-quoted = ->
-  wrap '"', '"', quoted_inner()
 
 quoted_inner = ->
   slash = '\\'.charCodeAt 0
@@ -422,25 +470,13 @@ lookup = (map) ->
 
 # Use one parser if the buffer starts with one char, and another if not
 starts_with = (c, y, n) ->
-  code = c.charCodeAt 0
-  ->
-    handler = null
-    (data) ->
-      if not handler
-        start = false
-        handler = y() if data.buf[data.pos] == code else n()
-      handler data
+  cmp = {}
+  cmp[c] = y
+  cmp[''] = n
+  lookup cmp
 
 ifset = (c, cb) ->
-  code = c.charCodeAt 0
-  ->
-    handler = null
-    (data) ->
-      if not handler
-        return null if data.buf[data.pos] != code
-        handler = cb()
-      handler data
-
+  starts_with c, cb, null_resp()
 
 space_list = (cb, none) ->
   sp = ' '.charCodeAt 0
@@ -477,14 +513,9 @@ space_list = (cb, none) ->
 
 
 opt = (c) ->
-  code = c.charCodeAt 0
-  ->
-    (data) ->
-      if data.buf[data.pos] == code
-        data.pos += 1
-        return new Buffer c
-      else
-        return new Buffer 0
+  starts_with c,
+    (-> (data) -> new Buffer c),
+    (-> (data) -> new Buffer 0)
 
 wrap = (open, close, cb) ->
   series [
@@ -556,6 +587,7 @@ route = (routes, nomatch) ->
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
 series = (parts, ids) ->
+  
   ->
     i = 0
     handler = parts[i]()
@@ -594,21 +626,6 @@ l = (data) ->
   console.log data.buf[data.pos...]
   console.log data.buf.toString('utf8', data.pos)
 
-greeting = do ->
-  text_code = series [ bracket_wrap(resp_text_code()), str(' ') ], 0
-
-  zip [ null, 'type', null, 'text-code', 'text'], series [
-    str('* '),
-    oneof(['OK', 'PREAUTH', 'BYE']),
-    str(' '),
-    ifset('[', text_code),
-    text(),
-    crlf()
-  ]
-
-
-
-response = do ->
-  ->
-    (data) ->
+greeting = greeting()
+response = response()
 
