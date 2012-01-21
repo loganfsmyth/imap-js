@@ -178,39 +178,34 @@ curly_wrap    = (cb) -> wrap '{', '}', cb
 
 ###################### Data Type helpers ###############
 
+collect_until = (cb) ->
+  ->
+    col = collector()
+    (data) ->
+      i = cb data
+      if typeof i == 'undefined'
+        col data.buf[data.pos...]
+        data.pos = data.buf.length
+      else
+        col data.buf[data.pos...data.pos+i]
+        data.pos += i
+        all = col()
+        return all if all
+        err data, 'collect_until', 'must have at least one value'
+      return
+
 textchar_str = ->
   chars = text_chars()
   brac = ']'.charCodeAt 0
-  ->
-    col = collector()
-    (data) ->
-      for code, i in data.buf[data.pos...]
-        if code not in chars or code == brac
-          col data.buf[data.pos...data.pos+i]
-          data.pos += i
-          all = col()
-
-          return all if all
-
-          err data, 'textchar_str', 'textchar_strings must have at least one value'
-
-      col data.buf[data.pos...]
-      data.pos = data.length
+  collect_until (data) ->
+    for code, i in data.buf[data.pos...]
+      return i if code not in chars or code == brac
 
 atom = ->
-  ->
-    col = collector()
-    (data) ->
-      for code, i in data.buf[data.pos...]
-        if code not in atom_chars()
-          col data.buf[data.pos...data.pos+i]
-          data.pos += i
-          all = col()
-          return all if all
-          err data, 'atom', 'atom must contain at least one character'
-
-      col data.buf[data.pos...]
-      data.pos = data.length
+  chars = atom_chars()
+  collect_until (data) ->
+    for code, i in data.buf[data.pos...]
+      return i if code not in chars
 
 astring = ->
   lookup {
@@ -222,22 +217,9 @@ astring = ->
 text = ->
   cr = "\r".charCodeAt 0
   lf = "\n".charCodeAt 0
-  ->
-    bufs = []
-    col = collector()
-    (data) ->
-      for c, i in data.buf[data.pos...]
-        if c in [cr, lf]
-          col data.buf[data.pos...data.pos + i]
-          data.pos += i
-          all = col()
-          return all if all
-
-          err data, 'text', 'text must contain at least one character'
-
-      col data.buf[data.pos...]
-      data.pos = data.buf.length
-      return
+  collect_until (data) ->
+    for code, i in data.buf[data.pos...]
+      return i if code in [cr, lf]
 
 number = (nz) ->
   ->
