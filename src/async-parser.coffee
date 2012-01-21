@@ -120,7 +120,7 @@ exports.SyntaxError = class SyntaxError extends Error
 
 
 resp_text_code = ->
-  space_num           = parse [ str(' '), nz_number() ], 1
+  space_num           = parse [ str(' '), number(true) ], 1
   badcharset_args     = parse [ str(' '), paren_wrap(space_list(astring())) ], 1
   capability_args     = parse [ str(' '), capability_data() ], 1
   permanentflags_args = parse [ str(' '), paren_wrap(space_list(flag_perm(), true)) ], 1
@@ -239,29 +239,18 @@ text = ->
       data.pos = data.buf.length
       return
 
-nz_number = ->
+number = (nz) ->
   ->
     i = 0
     str = ''
+    first_range = nz and [ 0x31 .. 0x39 ] or [ 0x30 .. 0x39 ]
     (data) ->
       for code in data.buf[data.pos...]
-        if i == 0 and code not in [ 0x31 .. 0x39 ]
-          err data, 'nz_number', 'First digit must be between 1 and 9'
+        if i == 0 and code not in first_range
+          err data, 'number', 'First digit must be between #{if nz then 1 else 0} and 9'
+        
         if code not in [ 0x30 .. 0x39 ]
           return parseInt str, 10
-        data.pos += 1
-        i += 1
-        str += String.fromCharCode code
-
-number = ->
-  ->
-    i = 0
-    str = ''
-    (data) ->
-      for code in data.buf[data.pos...]
-        if code not in [ 0x30 .. 0x39 ]
-          if i == 0 then err data, 'nz_number', 'First digit must be between 1 and 9'
-          else return parseInt str, 10
         data.pos += 1
         i += 1
         str += String.fromCharCode code
