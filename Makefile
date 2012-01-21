@@ -1,14 +1,6 @@
 
 COFFEE_SRC = \
-  src/imap-client.coffee    \
-  src/imap-parser.coffee    \
-  src/imap-mailbox.coffee   \
-  src/imap-messageset.coffee\
-  src/imap-tokenizer.coffee \
-  src/imap-token-parser.coffee \
-  src/async-parser.coffee   \
-  src/imap-connection.coffee
-
+  src/*.coffee
 
 C_SRC = \
   src/imap_parser.cc        \

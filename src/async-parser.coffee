@@ -5,15 +5,26 @@ Stream = require 'stream'
 exports.TYPE_CLIENT = CLIENT = 0x01
 exports.TYPE_SERVER = SERVER = 0x02
 
+exports.createParser = (type, cb) ->
+  p = new Parser(type)
+  p.on 'response', cb if cb
+  return p
+
+
 exports.Parser = class Parser extends Stream
   constructor: (@type) ->
     @writable = true
     @destroyed = false
     @writing = false
 
-    @greeting()
+    if @type == CLIENT
+      @_greeting()
+    else if @type == SERVER
+      @_command()
+    else
+      throw Error "Parser type must be client or server."
 
-  greeting: () ->
+  _greeting: () ->
     greet = greeting()
     @parser = (data) =>
       result = greet data
@@ -24,10 +35,10 @@ exports.Parser = class Parser extends Stream
       console.log result.text
 
       @emit 'greeting', result
-#      @response()
+      @_response()
       return
 
-  response: () ->
+  _response: () ->
     resp = response()
     @parser = (data) =>
       result = resp data
@@ -36,7 +47,7 @@ exports.Parser = class Parser extends Stream
       console.log 'Response:'
       console.log result
       @emit 'response', result
-      @response()
+      @_response()
       return
 
   write: (buffer, encoding) ->
@@ -53,8 +64,8 @@ exports.Parser = class Parser extends Stream
         @parser data
       catch e
         throw e if e not instanceof SyntaxError
-        console.log e.toString()
-        #@emit 'error', e
+        #console.log e.toString()
+        @emit 'error', e
         @destroy()
 
     @writing = false
@@ -95,8 +106,12 @@ class SyntaxError extends Error
 
     error = pos - start
 
-    @message = rule + (extra and "\n" + extra) + "\n==" + buf.toString('ascii', start, end) + "==\n  " +
-      (" " for i in [0...pos]).join('') + "^\n"
+    @message =
+      rule + (extra and "\n" + extra) + "\n" +
+      "==" + buf.toString('utf8', start, end) + "==\n" +
+      "  " + (" " for i in [0...pos]).join('') + "^\n"
+
+response = ->
 
 greeting = ->
   zip [ null, 'type', null, 'text'], parse [
@@ -112,7 +127,7 @@ resp_text = ->
   n = text()
   y = parse [ bracket_wrap(resp_text_code), str(' '), n ]
   y = zip ['text-code', null, 'text'], y
-  n = zip ['text'], n
+  n = zip ['text'], parse [ n ]
 
   starts_with '[', y, n
 
@@ -125,7 +140,7 @@ resp_text_code = ->
     'BADCHARSET': lookup({' ': badcharset, '':empty}),
     'CAPABILITY': pick(1, parse([str(' '), capability_data()])),
     'PARSE': null,
-    'PERMANENTFLAGS': pick(1, parse([str(' '), space_list(flag_perm)])),
+    'PERMANENTFLAGS': pick(1, parse([str(' '), paren_wrap(-> space_list(flag_perm, true))])),
     'READ-ONLY': null,
     'READ-WRITE': null,
     'TRYCREATE': null,
@@ -177,7 +192,6 @@ atom = ->
       if code not in atom_chars()
         col data.buf[data.pos...data.pos+i]
         data.pos += i
-        
         all = col()
         return all if all
         err data, 'atom', 'atom must contain at least one character'
@@ -371,13 +385,15 @@ text_chars = do ->
   b = new Buffer (c for c in [0x01..0x7F] when c != 10 and c != 13) # all except \r and \n
   -> b
 
-space_list = (cb) ->
+space_list = (cb, none) ->
   results = []
   handler = cb()
   space = true
-
+  i = 0
   (data) ->
+    i += 1
     if not results.length
+      return [] if i == 1 and none and data.buf[data.pos] == ')'.charCodeAt 0
       result = handler data
       return if typeof result == 'undefined'
       results.push result
@@ -427,26 +443,18 @@ text = ->
   cr = "\r".charCodeAt 0
   lf = "\n".charCodeAt 0
   bufs = []
-  length = 0
+  col = collector()
   (data) ->
     for c, i in data.buf[data.pos...]
       if c in [cr, lf]
-        tmp = data.buf[data.pos...data.pos + i]
+        col data.buf[data.pos...data.pos + i]
         data.pos += i
-        bufs.push tmp
-        length += tmp.length
+        all = col()
+        return all if all
 
-        all = new Buffer length
-        pos = 0
-        for b in bufs
-          b.copy all, pos
-          pos += b.length
-        bufs = null
-        return all.toString()
+        err data, 'text', 'text must contain at least one character'
 
-    b = data.buf[data.pos...]
-    bufs.push b
-    length += b.length
+    col data.buf[data.pos...]
     data.pos = data.buf.length
     return
 
@@ -502,15 +510,15 @@ str = (s) ->
     data.pos = pos
 
     if i == buffer.length
-      return s
+      return buffer
 
 opt = (c) ->
   (data) ->
     if data.buf[data.pos] == c.charCodeAt 0
       data.pos += 1
-      return c
+      return new Buffer c
     else
-      return ''
+      return new Buffer 0
 
 each = (ea, cb) ->
   (data) ->
@@ -528,9 +536,13 @@ err = (data, rule, extra) ->
   throw new SyntaxError data, rule, extra
 
 join = (cb) ->
+  col = collector()
   (data) ->
     result = cb data
-    return result.join '' if typeof result != 'undefined'
+    if typeof result != 'undefined'
+      (col b for b in result)
+      return col()
+
 
 oneof = (strs, nomatch) ->
   matches = strs
