@@ -30,7 +30,7 @@
     "* OK [ALERT] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'ALERT',
+        'key': new Buffer('ALERT'),
         'value': null
       },
       'text': new Buffer('word')
@@ -40,7 +40,7 @@
     "* OK [BADCHARSET] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'BADCHARSET',
+        'key': new Buffer('BADCHARSET'),
         'value': []
       },
       'text': new Buffer('word')
@@ -48,7 +48,7 @@
     "* OK [BADCHARSET (\"word\")] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'BADCHARSET',
+        'key': new Buffer('BADCHARSET'),
         'value': [new Buffer('word')]
       },
       'text': new Buffer('word')
@@ -56,7 +56,7 @@
     "* OK [BADCHARSET (\"word\" \"word2\")] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'BADCHARSET',
+        'key': new Buffer('BADCHARSET'),
         'value': [new Buffer('word'), new Buffer('word2')]
       },
       'text': new Buffer('word')
@@ -67,7 +67,7 @@
     "* OK [CAPABILITY IMAP4rev1] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'CAPABILITY',
+        'key': new Buffer('CAPABILITY'),
         'value': [new Buffer('IMAP4rev1')]
       },
       'text': new Buffer('word')
@@ -75,7 +75,7 @@
     "* OK [CAPABILITY IMAP4rev1 word2] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'CAPABILITY',
+        'key': new Buffer('CAPABILITY'),
         'value': [new Buffer('IMAP4rev1'), new Buffer('word2')]
       },
       'text': new Buffer('word')
@@ -85,7 +85,7 @@
     "* OK [PARSE] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'PARSE',
+        'key': new Buffer('PARSE'),
         'value': null
       },
       'text': new Buffer('word')
@@ -93,7 +93,7 @@
     "* OK [PERMANENTFLAGS ()] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'PERMANENTFLAGS',
+        'key': new Buffer('PERMANENTFLAGS'),
         'value': []
       },
       'text': new Buffer('word')
@@ -101,7 +101,7 @@
     "* OK [PERMANENTFLAGS (\\Unseen \\Unread)] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'PERMANENTFLAGS',
+        'key': new Buffer('PERMANENTFLAGS'),
         'value': [new Buffer('\\Unseen'), new Buffer('\\Unread')]
       },
       'text': new Buffer('word')
@@ -110,7 +110,7 @@
     "* OK [READ-ONLY] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'READ-ONLY',
+        'key': new Buffer('READ-ONLY'),
         'value': null
       },
       'text': new Buffer('word')
@@ -118,7 +118,7 @@
     "* OK [READ-WRITE] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'READ-WRITE',
+        'key': new Buffer('READ-WRITE'),
         'value': null
       },
       'text': new Buffer('word')
@@ -126,7 +126,7 @@
     "* OK [TRYCREATE] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'TRYCREATE',
+        'key': new Buffer('TRYCREATE'),
         'value': null
       },
       'text': new Buffer('word')
@@ -134,7 +134,7 @@
     "* OK [UIDNEXT 10] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'UIDNEXT',
+        'key': new Buffer('UIDNEXT'),
         'value': 10
       },
       'text': new Buffer('word')
@@ -145,7 +145,7 @@
     "* OK [UIDVALIDITY 10] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'UIDVALIDITY',
+        'key': new Buffer('UIDVALIDITY'),
         'value': 10
       },
       'text': new Buffer('word')
@@ -153,7 +153,7 @@
     "* OK [UNSEEN 10] word\n": {
       'type': 'OK',
       'text-code': {
-        'key': 'UNSEEN',
+        'key': new Buffer('UNSEEN'),
         'value': 10
       },
       'text': new Buffer('word')

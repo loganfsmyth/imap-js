@@ -207,12 +207,13 @@ response_data_types = ->
     "CAPABILITY": capability_args()
   }, response_numeric_types()
 
-response_numeric_types = ->
+response_numeric_types = (key) ->
   types = route
     'EXISTS': null
     'RECENT': null
     'EXPUNGE': null
     'FETCH': series [ str(' '), msg_att() ], 1
+
   series [
     number()
     str ' '
@@ -392,7 +393,10 @@ resp_text_code = ->
   badcharset_args     = series [ str(' '), paren_wrap space_list astring() ], 1
 
   permanentflags_args = series [ str(' '), paren_wrap space_list(flag(true), true) ], 1
-  atom_args           = series [ str(' '), textchar_str() ], 1
+
+  atom_args = lookup
+    ' ': series [ str(' '), textchar_str() ], 1
+    '': null_resp()
 
   text_codes = route
     'ALERT':          null
@@ -406,10 +410,13 @@ resp_text_code = ->
     'UIDNEXT':        space_num
     'UIDVALIDITY':    space_num
     'UNSEEN':         space_num
-  , series [
-      atom()
-      lookup({' ': atom_args, '': null_resp() })
-    ]
+  , (key) ->
+      handler = atom_args()
+      (data) ->
+        result = handler data
+        return if typeof result == 'undefined'
+        return [key, result]
+
 
   zip ['key', 'value'], text_codes
 
@@ -788,23 +795,26 @@ oneof = (strs, nomatch) ->
         else return null
 
 route = (routes, nomatch) ->
-  key_cb = oneof (k for own k,v of routes), nomatch
+  key_cb = atom()
   ->
     key = null
     key_func = key_cb()
     nomatch_func = null
     route_func = null
     (data) ->
-      if not key_func
+      if nomatch_func
         return nomatch_func data
       else if not route_func
         key = key_func data
         return if typeof key == 'undefined'
-        if key == null
-          key_func = null
-          nomatch_func = nomatch()
-        else if routes[key]
-          route_func = routes[key]()
+        key_str = key.toString 'ascii'
+        if routes[key_str]
+          route_func = routes[key_str]()
+        else if typeof routes[key] == 'undefined'
+          if nomatch
+            nomatch_func = nomatch key
+          else
+            err data, 'route', 'key not a valid route'
         else
           return [key, null]
       else if route_func
