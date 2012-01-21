@@ -178,11 +178,12 @@ curly_wrap    = (cb) -> wrap '{', '}', cb
 
 ###################### Data Type helpers ###############
 
-collect_until = (cb) ->
-  ->
+collect_until = (cb, none) ->
+  (arg)->
     col = collector()
+    handler = cb arg
     (data) ->
-      i = cb data
+      i = handler data
       if typeof i == 'undefined'
         col data.buf[data.pos...]
         data.pos = data.buf.length
@@ -190,20 +191,20 @@ collect_until = (cb) ->
         col data.buf[data.pos...data.pos+i]
         data.pos += i
         all = col()
-        return all if all
+        return all if all or none
         err data, 'collect_until', 'must have at least one value'
       return
 
 textchar_str = ->
   chars = text_chars()
   brac = ']'.charCodeAt 0
-  collect_until (data) ->
+  collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars or code == brac
 
 atom = ->
   chars = atom_chars()
-  collect_until (data) ->
+  collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
 
@@ -217,7 +218,7 @@ astring = ->
 text = ->
   cr = "\r".charCodeAt 0
   lf = "\n".charCodeAt 0
-  collect_until (data) ->
+  collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code in [cr, lf]
 
@@ -253,24 +254,15 @@ quoted = ->
 quoted_inner = ->
   slash = '\\'.charCodeAt 0
   quote = '"'.charCodeAt 0
-  ->
+  collect_until ->
     escaped = 0
-    col = collector()
     (data) ->
-      for code,j in data.buf[data.pos...]
+      for code, i in data.buf[data.pos...]
         if escaped%2 == 1 or code == slash
           escaped += 1
           continue
-
-        if code == quote
-          col data.buf[data.pos...data.pos+j]
-          data.pos += j
-          return col()
-
-      col data.buf[data.pos...]
-      data.pos = data.length
-
-
+        return i if code == quote
+  , true
 
 literal = (emit) ->
   size = literal_size()
@@ -301,49 +293,23 @@ literal_size = ->
   curly_wrap number()
 
 literal_data = (emit) ->
-  (size) ->
-    buffers = [] if not emit
+  collect_until (size) ->
     remaining = size
     (data) ->
       len = Math.min data.buf.length - data.pos, size
       remaining -= len
-      buf = data.buf[data.pos...data.pos+len]
+      buf = data.buf[data.pos ... data.pos+len]
       data.pos += len
-      for code in buf
-        if code not in [0x01..0xFF]
-          err data, 'literal_data', 'Literals can only bytes between 1 and 255'
-
-      if not emit
-        buffers.push buf
-        if remaining == 0
-          all = new Buffer size
-          pos = 0
-          for b in buffers
-            b.copy all, pos
-            pos += b.length
-          return all
-      else
-        emit buf
-        if remailing == 0
-          return true
+      for code in buf when code not in [0x01..0xFF]
+        err data, 'literal_data', 'Literals can only bytes between 1 and 255'
+      return len if remaining == 0
+  , true
 
 astring_str = ->
   chars = astring_chars()
-  ->
-    col = collector()
-    i = 0
-    (data) ->
-      for code, j in data.buf[data.pos...]
-        if code not in chars
-          if i == 0
-            err data, 'astring_str', 'astring character expected'
-          col data.buf[data.pos...data.pos+j]
-          data.pos += j
-          return col()
-        i += 1
-
-      col data.buf[data.pos...]
-      data.pos = data.length
+  collect_until -> (data) ->
+    for code, i in data.buf[data.pos...]
+      return i if code not in chars
 
 # Match a given string
 str = (s) ->
