@@ -1,6 +1,10 @@
 
 
 Stream = require 'stream'
+util = require 'util'
+
+print = (obj) ->
+  console.log util.inspect obj, false, 20
 
 exports.TYPE_CLIENT = CLIENT = 0x01
 exports.TYPE_SERVER = SERVER = 0x02
@@ -49,7 +53,8 @@ exports.Parser = class Parser extends Stream
       @partial = data.pos != data.buf.length
 
       console.log 'Response:'
-      console.log result
+      #console.log result
+      print result
       @_response()
       @emit 'response', result
 
@@ -185,17 +190,88 @@ response_data_types = ->
 # cond-bye
     "BYE": resp_text
 #mailbox-data
-    "FLAGS": null
-    "LIST": null
-    "LSUB": null
+    "FLAGS": series [ str(' '), flag_list() ], 1
+    "LIST": series [ str(' '), mailbox_list() ], 1
+    "LSUB": series [ str(' '), mailbox_list() ], 1
     "SEARCH": ifset ' ', series([ str(' '), space_list(number(true)) ], 1)
-    "STATUS": null
+    "STATUS": series [
+      str ' '
+      mailbox()
+      str ' '
+      paren_wrap status_att_list()
+    ], [1, 3]
     # number EXISTS | RECENT
 #message-data
     # nz-number EXPUNGE | FETCH msg-att
 # capability-data
     "CAPABILITY": capability_args()
   }
+
+flag_list = ->
+  paren_wrap space_list flag(), true
+
+mailbox_list = ->
+  series [
+    paren_wrap mbx_list_flags()
+    str ' '
+    starts_with '"', quoted_char(), nil()
+    str ' '
+    mailbox()
+  ], [0, 2, 4]
+
+mbx_list_flags = ->
+  space_list join(series [ str('\\'), atom() ]), true
+
+nil = -> str('NIL')
+
+quoted_char = ->
+  wrap '"', '"', quoted_char_inner()
+
+quoted_char_inner = ->
+  quote = '"'.charCodeAt 0
+  slash = '\\'.charCodeAt 0
+  chars = text_chars()
+  ->
+    escaped = false
+    (data) ->
+      if not escaped
+        code = data.buf[data.pos]
+        if code == slash
+          escaped = true
+          data.pos += 1
+        else if code in chars and code != quote
+          data.pos += 1
+          return data.buf[data.pos-1...data.pos]
+        else
+          err data, 'quoted_char_inner', 'must contain a text-char and no unescaped quotes'
+
+      return if data.pos >= data.buf.length
+
+      code = data.buf[data.pos]
+      if code in [quote, slash]
+        data.pos += 1
+        return data.buf[data.pos-1...data.pos]
+      else
+        err data, 'quoted_char_inner', 'Only quotes and slashes can be escaped'
+
+
+mailbox = ->
+  astring()
+
+status_att_list = ->
+  status_att_pair = series [
+    oneof [
+      'MESSAGES'
+      'RECENT'
+      'UIDNEXT'
+      'UIDVALIDITY'
+      'UNSEEN'
+    ]
+    str ' '
+    number()
+  ], [0, 2]
+
+  space_list status_att_pair, true
 
 
 tag = ->
@@ -208,7 +284,7 @@ resp_text_code = ->
   space_num           = series [ str(' '), number true ], 1
   badcharset_args     = series [ str(' '), paren_wrap space_list astring() ], 1
 
-  permanentflags_args = series [ str(' '), paren_wrap space_list(flag_perm(), true) ], 1
+  permanentflags_args = series [ str(' '), paren_wrap space_list(flag(true), true) ], 1
   atom_args           = series [ str(' '), textchar_str() ], 1
 
   text_codes = route
@@ -233,10 +309,13 @@ resp_text_code = ->
 empty_resp  = -> -> (data) -> []
 null_resp   = -> -> (data) -> null
 
-flag_perm = ->
-  slash_flags = lookup
-    '*': str('*')
-    '': atom()
+flag = (star) ->
+  slash_flags = if star
+    lookup
+      '*': str('*')
+      '': atom()
+  else
+    atom()
 
   lookup
     '\\': join series [str('\\'), slash_flags]
@@ -348,6 +427,9 @@ quoted_inner = ->
       for code, i in data.buf[data.pos...]
         if escaped%2 == 1 or code == slash
           escaped += 1
+          
+          if code not in [slash, quote]
+            err data, 'quoted_inner', 'Quoted strings can only escape quotes and slashes'
           continue
         return i if code == quote
   , true
