@@ -7,11 +7,6 @@
   parser = require('../../lib/async-parser');
 
   tests = {
-    "* BYE word\n": {
-      'type': 'BYE',
-      'text-code': null,
-      'text': new Buffer('word')
-    },
     "* OK word\n": {
       'type': 'OK',
       'text-code': null,
@@ -22,6 +17,16 @@
       'text-code': null,
       'text': new Buffer('word')
     },
+    "* BYE word\n": {
+      'type': 'BYE',
+      'text-code': null,
+      'text': new Buffer('word')
+    },
+    "a OK word\n": null,
+    "* O2 word\n": null,
+    "*OK word\n": null,
+    "*OKword\n": null,
+    "* OKword\n": null,
     "* OK [ALERT] word\n": {
       'type': 'OK',
       'text-code': {
@@ -30,6 +35,8 @@
       },
       'text': new Buffer('word')
     },
+    "* OK [ ALERT] word\n": null,
+    "* OK [ALERT ] word\n": null,
     "* OK [BADCHARSET] word\n": {
       'type': 'OK',
       'text-code': {
@@ -54,6 +61,8 @@
       },
       'text': new Buffer('word')
     },
+    "* OK [BADCHARSET ()] word\n": null,
+    "* OK [BADCHARSET \"word\"] word\n": null,
     "* OK [CAPABILITY IMAP4rev1] word\n": {
       'type': 'OK',
       'text-code': {
@@ -70,6 +79,8 @@
       },
       'text': new Buffer('word')
     },
+    "* OK [CAPABILITY] word\n": null,
+    "* OK [CAPABILITY ] word\n": null,
     "* OK [PARSE] word\n": {
       'type': 'OK',
       'text-code': {
@@ -94,6 +105,7 @@
       },
       'text': new Buffer('word')
     },
+    "* OK [PERMANENTFLAGS] word\n": null,
     "* OK [READ-ONLY] word\n": {
       'type': 'OK',
       'text-code': {
@@ -126,6 +138,9 @@
       },
       'text': new Buffer('word')
     },
+    "* OK [UIDNEXT 0] word\n": null,
+    "* OK [UIDNEXT] word\n": null,
+    "* OK [UIDNEXT ] word\n": null,
     "* OK [UIDVALIDITY 10] word\n": {
       'type': 'OK',
       'text-code': {
@@ -147,6 +162,16 @@
       'text-code': {
         'key': new Buffer('atom'),
         'value': new Buffer('word')
+      },
+      'text': new Buffer('word')
+    },
+    "* OK [atom ] word\n": null,
+    "* OK [atom \n] word\n": null,
+    "* OK [atom] word\n": {
+      'type': 'OK',
+      'text-code': {
+        'key': new Buffer('atom'),
+        'value': null
       },
       'text': new Buffer('word')
     }
@@ -184,18 +209,32 @@
     for (suf in _ref) {
       if (!__hasProp.call(_ref, suf)) continue;
       wrt = _ref[suf];
-      name = str.replace(/[\r\n]/, '_');
-      _results.push(cases[name + '_' + suf] = function(test) {
-        p.on('greeting', function(greeting) {
-          test.deepEqual(greeting, expected, 'Response matches expected value.');
-          return test.done();
+      name = str.replace(/[\r\n]/g, '_');
+      if (expected) {
+        _results.push(cases[name + '_' + suf] = function(test) {
+          p.on('greeting', function(greeting) {
+            test.deepEqual(greeting, expected, 'Response matches expected value.');
+            return test.done();
+          });
+          p.on('error', function(err) {
+            test.ok(false, err.toString());
+            return test.done();
+          });
+          return wrt(new Buffer(str));
         });
-        p.on('error', function(err) {
-          test.ok(false, err.toString());
-          return test.done();
+      } else {
+        _results.push(cases[name + '_' + suf] = function(test) {
+          p.on('greeting', function(greeting) {
+            test.ok(false, 'greeting unexpectedly successfully parsed');
+            return test.done();
+          });
+          p.on('error', function(err) {
+            test.ok(err instanceof parser.SyntaxError, 'Test threw a syntax error');
+            return test.done();
+          });
+          return wrt(new Buffer(str));
         });
-        return wrt(new Buffer(str));
-      });
+      }
     }
     return _results;
   };

@@ -94,7 +94,7 @@ exports.Parser = class Parser extends Stream
     return
 
 
-class SyntaxError extends Error
+exports.SyntaxError = class SyntaxError extends Error
   constructor: (data, rule = '', extra = '') ->
     context = 10
     @name = "IMAPSyntaxError"
@@ -148,7 +148,7 @@ resp_text_code = ->
     'UIDNEXT': space_num,
     'UIDVALIDITY': space_num,
     'UNSEEN': space_num,
-  }, parse([atom(), lookup({' ': atom_args, '': empty  })])
+  }, parse([atom(), lookup({' ': atom_args, '': -> (data) -> null })])
 
 textchar_str = () ->
   col = collector()
