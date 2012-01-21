@@ -207,18 +207,24 @@ response_data_types = ->
     "CAPABILITY": capability_args()
   }, response_numeric_types()
 
-response_numeric_types = (key) ->
+response_numeric_types = () ->
   types = route
     'EXISTS': null
     'RECENT': null
     'EXPUNGE': null
     'FETCH': series [ str(' '), msg_att() ], 1
 
-  series [
-    number()
+  cb = series [
     str ' '
     types
-  ], [0, 2]
+  ], 1
+
+  (num) ->
+    handler = cb()
+    (data) ->
+      result = handler data
+      return if typeof result == 'undefined'
+      return [num, result]
 
 sp = -> str ' '
 
@@ -271,32 +277,35 @@ env_from = env_sender = env_reply_to = env_to = env_cc = env_bcc = ->
     nil(),
     paren_wrap space_list address()
 
-
-
 date_time = ->
-  series [
+  cb = series [
     str '"'
-    starts_with ' ', series([sp(), digit()]), series([digit(), digit()])
-    str '-'
-    oneof ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    str '-'
-    join series [digit(), digit(), digit(), digit()]
+    series [
+      starts_with ' ', series([sp(), digits(1)]), digits(2)
+      str '-'
+      oneof ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      str '-'
+      digits(4)
+    ]
     sp()
     time()
     sp()
     zone()
     str '"'
   ]
+
+  zip [null, 'date', null, 'time', null, 'zone'], cb
+
 time = ->
   join series [
-    join series [digit(), digit()]
+    digits 2
     str ':'
-    join series [digit(), digit()]
+    digits 2
     str ':'
-    join series [digit(), digit()]
+    digits 2
   ]
 zone = ->
-  join series [ oneof(['-', '+']), digit(), digit(), digit(), digit() ]
+  series [ oneof(['-', '+']), digits(4) ]
 
 nstring = ->
   starts_with 'N', nil(), string()
@@ -304,13 +313,41 @@ nstring = ->
 address = ->
   -> (data) ->
 
-digit = ->
+digits = (num) ->
+  collect_until ->
+    i = 0
+    (data) ->
+      for code, j in data.buf[data.pos...]
+        i++
+        if code not in [0x30..0x39]
+          err data, 'digits', 'expected a number between 0 and 9'
+
+        if i == num
+          return j+1
+      return
 
 
 body = ->
   
 
 section = ->
+  bracket_wrap section_spec()
+
+section_msgtext = ->
+  route
+    "HEADER": null
+    "HEADER.FIELDS": series [ sp(), header_list() ]
+    "HEADER.FIELDS.NOT": series [ sp(), header_list() ]
+    "TEXT": null
+
+section_spec = ->
+  # TODO more
+  section_msgtext()
+
+header_list = ->
+  ->
+    
+
 
 uniqueid = ->
   number(true)
@@ -416,7 +453,6 @@ resp_text_code = ->
         result = handler data
         return if typeof result == 'undefined'
         return [key, result]
-
 
   zip ['key', 'value'], text_codes
 
@@ -794,8 +830,17 @@ oneof = (strs, nomatch) ->
         if not nomatch then err data, 'oneof', 'No matches in ' + strs.join(',')
         else return null
 
+route_key = ->
+  nums = [0x30..0x39]
+  upper = [0x41..0x5A]
+  lower = [0x61..0x7A]
+  dash = '-'.charCodeAt 0
+  collect_until -> (data) ->
+    for code, i in data.buf[data.pos...]
+      return i if code != dash and code not in nums and code not in upper and code not in lower
+
 route = (routes, nomatch) ->
-  key_cb = atom()
+  key_cb = route_key()
   ->
     key = null
     key_func = key_cb()
@@ -814,7 +859,7 @@ route = (routes, nomatch) ->
           if nomatch
             nomatch_func = nomatch key
           else
-            err data, 'route', 'key not a valid route'
+            err data, 'route', "key #{key_str} is not a valid route in " + (k for own k,v of routes)
         else
           return [key, null]
       else if route_func
@@ -849,17 +894,20 @@ series = (parts, ids) ->
 
 # Zip an array of keys and a callback that returns an array
 zip = (keys, cb) ->
+  onres cb, (result) ->
+    ret = {}
+    for k, i in keys when k
+      ret[k] = result[i]
+    return ret
+
+onres = (cb, res_cb) ->
   ->
-    data_cb = cb()
+    handler = cb()
     (data) ->
-      result = data_cb data
+      result = handler data
       return if typeof result == 'undefined'
 
-      ret = {}
-      for k, i in keys when k
-        ret[k] = result[i]
-      return ret
-
+      return res_cb result
 
 l = (data) ->
   console.log data.buf[data.pos...]
