@@ -46,7 +46,7 @@ exports.Parser = class Parser extends Stream
       @partial = true
       result = resp data
       return if not result
-      @partial = data.pos != data.bud.length
+      @partial = data.pos != data.buf.length
 
       console.log 'Response:'
       console.log result
@@ -119,60 +119,60 @@ exports.SyntaxError = class SyntaxError extends Error
       "  " + (" " for i in [0...pos]).join('') + "^\n"
 
 response = ->
+  ->
+    (data) ->
 
-greeting = ->
-  text_code = pick 0, parse [ bracket_wrap(resp_text_code), str(' ')]
 
-  zip [ null, 'type', null, 'text-code', 'text'], parse [
-    str('* '),
-    oneof(['OK', 'PREAUTH', 'BYE']),
-    str(' '),
-    ifset('[', text_code),
-    text(),
-    crlf()
-  ]
-
-ifset  = (c, cb) ->
-  found = false
-  (data) ->
-    if not found
-      found = true
-      return null if data.buf[data.pos] != c.charCodeAt 0
-    cb data
+ifset = (c, cb) ->
+  code = c.charCodeAt 0
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        return null if data.buf[data.pos] != code
+        handler = cb()
+      handler data
 
 resp_text_code = ->
   space_num = pick 1, parse [str(' '), nz_number()]
-  badcharset = -> pick(1, parse([str(' '), paren_wrap(-> space_list(astring))]))
+  badcharset = pick(1, parse([str(' '), paren_wrap(space_list(astring()))]))
 
   zip ['key', 'value'], route {
     'ALERT': null
-    'BADCHARSET': lookup({' ': badcharset, '':empty}),
+    'BADCHARSET': lookup({ ' ': badcharset, '': empty() }),
     'CAPABILITY': pick(1, parse([str(' '), capability_data()])),
     'PARSE': null,
-    'PERMANENTFLAGS': pick(1, parse([str(' '), paren_wrap(-> space_list(flag_perm, true))])),
+    'PERMANENTFLAGS': pick(1, parse([str(' '), paren_wrap(space_list(flag_perm(), true))])),
     'READ-ONLY': null,
     'READ-WRITE': null,
     'TRYCREATE': null,
     'UIDNEXT': space_num,
     'UIDVALIDITY': space_num,
     'UNSEEN': space_num,
-  }, parse([atom(), lookup({' ': atom_args, '': -> (data) -> null })])
+  }, parse([atom(), lookup({' ': atom_args(), '': -> (data) -> null }) ])
 
-textchar_str = () ->
-  col = collector()
-  (data) ->
-    for code, i in data.buf[data.pos...]
-      if code not in text_chars() or code == ']'.charCodeAt 0
-        col data.buf[data.pos...data.pos+i]
-        data.pos += i
-        all = col()
+empty = ->
+  ->
+    (data) -> []
 
-        return all if all
+textchar_str = ->
+  chars = text_chars()
+  brac = ']'.charCodeAt 0
+  ->
+    col = collector()
+    (data) ->
+      for code, i in data.buf[data.pos...]
+        if code not in chars or code == brac
+          col data.buf[data.pos...data.pos+i]
+          data.pos += i
+          all = col()
 
-        err data, 'textchar_str', 'textchar_strings must have at least one value'
+          return all if all
 
-    col data.buf[data.pos...]
-    data.pos = data.length
+          err data, 'textchar_str', 'textchar_strings must have at least one value'
+
+      col data.buf[data.pos...]
+      data.pos = data.length
 
 
 atom_args = ->
@@ -180,150 +180,165 @@ atom_args = ->
 
 flag_perm = ->
   slash_flags = lookup
-    '*': -> str('*')
-    '': -> atom()
+    '*': str('*')
+    '': atom()
 
   lookup
-    '\\': -> join(parse([str('\\'), slash_flags]))
-    '': atom
+    '\\': join(parse([str('\\'), slash_flags]))
+    '': atom()
 
 
 capability_data = ->
-  space_list capability
+  space_list capability()
 
 capability = ->
   atom()
 
 atom = ->
-  col = collector()
-  (data) ->
-    for code, i in data.buf[data.pos...]
-      if code not in atom_chars()
-        col data.buf[data.pos...data.pos+i]
-        data.pos += i
-        all = col()
-        return all if all
-        err data, 'atom', 'atom must contain at least one character'
+  ->
+    col = collector()
+    (data) ->
+      for code, i in data.buf[data.pos...]
+        if code not in atom_chars()
+          col data.buf[data.pos...data.pos+i]
+          data.pos += i
+          all = col()
+          return all if all
+          err data, 'atom', 'atom must contain at least one character'
 
-    col data.buf[data.pos...]
-    data.pos = data.length
-
-empty = ->
-  (data) -> []
+      col data.buf[data.pos...]
+      data.pos = data.length
 
 astring = ->
   lookup {
-    '{': string,
-    '"': string,
-    '': astring_str,
+    '{': string(),
+    '"': string(),
+    '': astring_str(),
   }
 
 lookup = (map) ->
-  handler = null
-  (data) ->
-    if not handler
-      c = String.fromCharCode data.buf[data.pos]
-      handler = if map[c] then map[c]() else map['']()
-    handler data
+  for own k,v of map
+    delete map[k]
+    if k == ''
+      map[0] = v
+    else
+      k = k.charCodeAt 0
+      map[k] = v
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        c = data.buf[data.pos]
+        handler = if map[c] then map[c]() else map[0]()
+      handler data
 
 string = ->
   lookup {
-    '{': literal,
-    '"': quoted,
-    '': (data) ->
-      err data, 'string', 'Expected a { or " at the start of the string.'
+    '{': literal(),
+    '"': quoted(),
+    '': ->
+      (data) ->
+        err data, 'string', 'Expected a { or " at the start of the string.'
   }
 
 
 quoted = ->
-  wrap '"', '"', quoted_inner
+  wrap '"', '"', quoted_inner()
 
 quoted_inner = ->
-  escaped = 0
-  col = collector()
-  (data) ->
-    for code,j in data.buf[data.pos...]
-      if escaped%2 == 1 or code == '\\'.charCodeAt 0
-        escaped += 1
-        continue
+  slash = '\\'.charCodeAt 0
+  quote = '"'.charCodeAt 0
+  ->
+    escaped = 0
+    col = collector()
+    (data) ->
+      for code,j in data.buf[data.pos...]
+        if escaped%2 == 1 or code == slash
+          escaped += 1
+          continue
 
-      if code == '"'.charCodeAt 0
-        col data.buf[data.pos...data.pos+j]
-        data.pos += j
-        return col()
+        if code == quote
+          col data.buf[data.pos...data.pos+j]
+          data.pos += j
+          return col()
 
-    col data.buf[data.pos...]
-    data.pos = data.length
+      col data.buf[data.pos...]
+      data.pos = data.length
 
 
 
 literal = (emit) ->
   size = literal_size()
   nl = crlf()
-  dat = null
-  length = 0
-  (data) ->
-    if size
-      result = size data
-      return if typeof result == 'undefined'
-      length = result
-      size = null
-      dat = literal_data length, emit
+  literal_dat = literal_data(emit)
+  ->
+    size_cb = size()
+    nl_cb = nl()
+    dat = null
+    length = 0
+    (data) ->
+      if size_cb
+        result = size_cb data
+        return if typeof result == 'undefined'
+        length = result
+        size = null
+        dat = literal_dat length
 
-    if nl
-      result = nl data
-      return if typeof result == 'undefined'
-      nl = null
+      if nl
+        result = nl data
+        return if typeof result == 'undefined'
+        nl = null
 
-    result = dat data
-    return result if typeof result != 'undefined'
+      result = dat data
+      return result if typeof result != 'undefined'
 
 literal_size = ->
-  curly_wrap number
+  curly_wrap number()
 
-literal_data = (size, emit) ->
-  buffers = [] if not emit
-  remaining = size
-  (data) ->
-    len = Math.min data.buf.length - data.pos, size
-    remaining -= len
-    buf = data.buf[data.pos...data.pos+len]
-    data.pos += len
-    for code in buf
-      if code not in [0x01..0xFF]
-        err data, 'literal_data', 'Literals can only bytes between 1 and 255'
+literal_data = (emit) ->
+  (size) ->
+    buffers = [] if not emit
+    remaining = size
+    (data) ->
+      len = Math.min data.buf.length - data.pos, size
+      remaining -= len
+      buf = data.buf[data.pos...data.pos+len]
+      data.pos += len
+      for code in buf
+        if code not in [0x01..0xFF]
+          err data, 'literal_data', 'Literals can only bytes between 1 and 255'
 
-    if not emit
-      buffers.push buf
-      if remaining == 0
-        all = new Buffer size
-        pos = 0
-        for b in buffers
-          b.copy all, pos
-          pos += b.length
-        return all
-    else
-      emit buf
-      if remailing == 0
-        return true
+      if not emit
+        buffers.push buf
+        if remaining == 0
+          all = new Buffer size
+          pos = 0
+          for b in buffers
+            b.copy all, pos
+            pos += b.length
+          return all
+      else
+        emit buf
+        if remailing == 0
+          return true
 
 astring_str = ->
-  col = collector()
   chars = astring_chars()
-  i = 0
-  (data) ->
-    for code, j in data.buf[data.pos...]
-      if code not in chars
-        if i == 0
-          err data, 'astring_str', 'astring character expected'
-        col data.buf[data.pos...data.pos+j]
-        data.pos += j
-        return col()
-      i += 1
+  ->
+    col = collector()
+    i = 0
+    (data) ->
+      for code, j in data.buf[data.pos...]
+        if code not in chars
+          if i == 0
+            err data, 'astring_str', 'astring character expected'
+          col data.buf[data.pos...data.pos+j]
+          data.pos += j
+          return col()
+        i += 1
 
-
-    col data.buf[data.pos...]
-    data.pos = data.length
+      col data.buf[data.pos...]
+      data.pos = data.length
 
 
 collector = ->
@@ -395,77 +410,85 @@ text_chars = do ->
   -> b
 
 space_list = (cb, none) ->
-  results = []
-  handler = cb()
-  space = true
-  i = 0
-  (data) ->
-    i += 1
-    if not results.length
-      return [] if i == 1 and none and data.buf[data.pos] == ')'.charCodeAt 0
+  sp = ' '.charCodeAt 0
+  paren = ')'.charCodeAt 0
+  ->
+    results = []
+    handler = cb()
+    space = true
+    i = 0
+    (data) ->
+      console.log data
+      i += 1
+      if not results.length
+        return [] if i == 1 and none and data.buf[data.pos] == paren
+        result = handler data
+        return if typeof result == 'undefined'
+        results.push result
+        return
+
+      if space
+        if data.buf[data.pos] != sp
+          console.log results
+          return results
+        space = false
+        data.pos += 1
+        handler = cb()
+        return
+
       result = handler data
       return if typeof result == 'undefined'
       results.push result
+      space = true
       return
-
-    if space
-      if data.buf[data.pos] != ' '.charCodeAt 0
-        return results
-      space = false
-      data.pos += 1
-      handler = cb()
-      return
-
-    result = handler data
-    return if typeof result == 'undefined'
-    results.push result
-    space = true
-    return
 
 nz_number = ->
-  i = 0
-  str = ''
-  (data) ->
-    for code in data.buf[data.pos...]
-      if i == 0 and code not in [ 0x31 .. 0x39 ]
-        err data, 'nz_number', 'First digit must be between 1 and 9'
-      if code not in [ 0x30 .. 0x39 ]
-        return parseInt str, 10
-      data.pos += 1
-      i += 1
-      str += String.fromCharCode code
+  ->
+    i = 0
+    str = ''
+    (data) ->
+      for code in data.buf[data.pos...]
+        if i == 0 and code not in [ 0x31 .. 0x39 ]
+          err data, 'nz_number', 'First digit must be between 1 and 9'
+        if code not in [ 0x30 .. 0x39 ]
+          return parseInt str, 10
+        data.pos += 1
+        i += 1
+        str += String.fromCharCode code
 
 number = ->
-  i = 0
-  str = ''
-  (data) ->
-    for code in data.buf[data.pos...]
-      if code not in [ 0x30 .. 0x39 ]
-        if i == 0 then err data, 'nz_number', 'First digit must be between 1 and 9'
-        else return parseInt str, 10
-      data.pos += 1
-      i += 1
-      str += String.fromCharCode code
+  ->
+    i = 0
+    str = ''
+    (data) ->
+      for code in data.buf[data.pos...]
+        if code not in [ 0x30 .. 0x39 ]
+          if i == 0 then err data, 'nz_number', 'First digit must be between 1 and 9'
+          else return parseInt str, 10
+        data.pos += 1
+        i += 1
+        str += String.fromCharCode code
 
 
 text = ->
   cr = "\r".charCodeAt 0
   lf = "\n".charCodeAt 0
-  bufs = []
-  col = collector()
-  (data) ->
-    for c, i in data.buf[data.pos...]
-      if c in [cr, lf]
-        col data.buf[data.pos...data.pos + i]
-        data.pos += i
-        all = col()
-        return all if all
+  ->
+    bufs = []
+    col = collector()
+    (data) ->
+      for c, i in data.buf[data.pos...]
+        if c in [cr, lf]
+          col data.buf[data.pos...data.pos + i]
+          data.pos += i
+          all = col()
+          return all if all
 
-        err data, 'text', 'text must contain at least one character'
+          err data, 'text', 'text must contain at least one character'
 
-    col data.buf[data.pos...]
-    data.pos = data.buf.length
-    return
+      col data.buf[data.pos...]
+      data.pos = data.buf.length
+      return
 
 
 crlf = ->
@@ -494,50 +517,45 @@ l = (data) ->
 
 # Use one parser if the buffer starts with one char, and another if not
 starts_with = (c, y, n) ->
-  start = true
-  found = null
-  (data) ->
-    if start
-      start = false
-      found = data.buf[data.pos] == c.charCodeAt 0
-
-    if found
-      y data
-    else
-      n data
+  code = c.charCodeAt 0
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        start = false
+        handler = y() if data.buf[data.pos] == code else n()
+      handler data
 
 # Match a given string
 str = (s) ->
   buffer = new Buffer s
-  i = 0
-  (data) ->
-    {pos, buf} = data
-    while pos < buf.length and i < buffer.length
-      err data, 'str', 'failed to match ' + s if buf[pos] != buffer[i]
-      i += 1
-      pos += 1
-    data.pos = pos
+  ->
+    i = 0
+    (data) ->
+      {pos, buf} = data
+      while pos < buf.length and i < buffer.length
+        err data, 'str', 'failed to match ' + s if buf[pos] != buffer[i]
+        i += 1
+        pos += 1
+      data.pos = pos
 
-    if i == buffer.length
-      return buffer
+      if i == buffer.length
+        return buffer
 
 opt = (c) ->
-  (data) ->
-    if data.buf[data.pos] == c.charCodeAt 0
-      data.pos += 1
-      return new Buffer c
-    else
-      return new Buffer 0
-
-each = (ea, cb) ->
-  (data) ->
-    results = cb data
-    (ea v for v in results) if typeof results != 'undefined'
+  code = c.charCodeAt 0
+  ->
+    (data) ->
+      if data.buf[data.pos] == code
+        data.pos += 1
+        return new Buffer c
+      else
+        return new Buffer 0
 
 wrap = (open, close, cb) ->
   pick 1, parse [
     str(open),
-    cb(),
+    cb,
     str(close),
   ]
 
@@ -545,79 +563,111 @@ err = (data, rule, extra) ->
   throw new SyntaxError data, rule, extra
 
 join = (cb) ->
-  col = collector()
-  (data) ->
-    result = cb data
-    if typeof result != 'undefined'
-      (col b for b in result)
-      return col()
+  ->
+    col = collector()
+    data_cb = cb()
+    (data) ->
+      result = data_cb data
+      if typeof result != 'undefined'
+        (col b for b in result)
+        return col()
 
 
 oneof = (strs, nomatch) ->
-  matches = strs
-  i = 0
-  (data) ->
-    for code in data.buf[data.pos...]
-      matches = (str for str in matches when str[i].charCodeAt(0) == code)
-      i += 1
-      data.pos += 1
-      if not matches.length or matches.length == 1 and matches[0].length == i
-        break
+  # TODO preconvert chars to buffers here
+  ->
+    matches = strs
+    i = 0
+    (data) ->
+      for code in data.buf[data.pos...]
+        matches = (str for str in matches when str[i].charCodeAt(0) == code)
+        i += 1
+        data.pos += 1
+        if not matches.length or matches.length == 1 and matches[0].length == i
+          break
 
-    if matches.length == 1 and matches[0].length == i
-      return matches[0]
-    else if matches.length == 0
-      data.pos -= 1 # TODO this will break w/ more than 1 char per buffer
-      if not nomatch then err data, 'oneof', 'No matches in ' + strs.join(',')
-      else return null
+      if matches.length == 1 and matches[0].length == i
+        return matches[0]
+      else if matches.length == 0
+        data.pos -= 1 # TODO this will break w/ more than 1 char per buffer
+        if not nomatch then err data, 'oneof', 'No matches in ' + strs.join(',')
+        else return null
 
 pick = (ids, cb) ->
-  (data) ->
-    result = cb data
-    return if typeof result == 'undefined'
-    return if typeof ids == 'number' then result[ids] else (result[i] for i in ids)
+  ->
+    data_cb = cb()
+    (data) ->
+      result = data_cb data
+      return if typeof result == 'undefined'
+      return if typeof ids == 'number' then result[ids] else (result[i] for i in ids)
 
 route = (routes, nomatch) ->
   key_cb = oneof (k for own k,v of routes), nomatch
-  key = null
-
-  (data) ->
-    if not key_cb
-      return nomatch data
-    else if not key
-      result = key_cb data
-      key = result if typeof result != 'undefined'
-      if result == null
-        key_cb = null
-    else if routes[key]
-      result = routes[key] data
-      if typeof result != 'undefined'
-        return [key, result]
-    else
-      return [ key, null ]
-    return
+  ->
+    key = null
+    key_func = key_cb()
+    nomatch_func = null
+    route_func = null
+    (data) ->
+      if not key_func
+        return nomatch_func data
+      else if not route_func
+        key = key_func data
+        return if typeof key == 'undefined'
+        if key == null
+          key_func = null
+          nomatch_func = nomatch()
+        else if routes[key]
+          route_func = routes[key]()
+        else
+          return [key, null]
+      else if route_func
+        result = route_func data
+        if typeof result != 'undefined'
+          return [key, result]
+      return
 
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
 parse = (parts) ->
-  ret = []
-  (data) ->
-    result = parts[0] data
-    return if typeof result == 'undefined'
+  ->
+    i = 0
+    handler = parts[i]()
+    ret = []
+    (data) ->
+      result = handler data
+      return if typeof result == 'undefined'
 
-    ret.push result
-    parts.shift()
-
-    ret if not parts.length
+      ret.push result
+      i += 1
+      return ret if parts.length == i
+      handler = parts[i]()
+      return
 
 # Zip an array of keys and a callback that returns an array
 zip = (keys, cb) ->
+  ->
+    data_cb = cb()
+    (data) ->
+      result = data_cb data
+      return if typeof result == 'undefined'
 
-  (data) ->
-    result = cb data
-    return if typeof result == 'undefined'
+      ret = {}
+      for k, i in keys when k
+        ret[k] = result[i]
+      return ret
 
-    ret = {}
-    for k, i in keys when k
-      ret[k] = result[i]
-    return ret
+
+
+
+greeting = do ->
+  text_code = pick 0, parse [ bracket_wrap(resp_text_code()), str(' ')]
+
+  zip [ null, 'type', null, 'text-code', 'text'], parse [
+    str('* '),
+    oneof(['OK', 'PREAUTH', 'BYE']),
+    str(' '),
+    ifset('[', text_code),
+    text(),
+    crlf()
+  ]
