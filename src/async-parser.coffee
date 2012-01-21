@@ -120,29 +120,33 @@ exports.SyntaxError = class SyntaxError extends Error
 
 
 resp_text_code = ->
-  space_num = parse [str(' '), nz_number()], 1
-  badcharset = parse [str(' '), paren_wrap(space_list(astring()))], 1
+  space_num           = parse [ str(' '), nz_number() ], 1
+  badcharset_args     = parse [ str(' '), paren_wrap(space_list(astring())) ], 1
+  capability_args     = parse [ str(' '), capability_data() ], 1
+  permanentflags_args = parse [ str(' '), paren_wrap(space_list(flag_perm(), true)) ], 1
+  atom_args           = parse [ str(' '), textchar_str() ], 1
 
-  zip ['key', 'value'], route {
-    'ALERT': null
-    'BADCHARSET': lookup({ ' ': badcharset, '': empty() }),
-    'CAPABILITY': parse([str(' '), capability_data()], 1),
-    'PARSE': null,
-    'PERMANENTFLAGS': parse([str(' '), paren_wrap(space_list(flag_perm(), true))], 1),
-    'READ-ONLY': null,
-    'READ-WRITE': null,
-    'TRYCREATE': null,
-    'UIDNEXT': space_num,
-    'UIDVALIDITY': space_num,
-    'UNSEEN': space_num,
-  }, parse([atom(), lookup({' ': atom_args(), '': -> (data) -> null }) ])
+  text_codes = route
+    'ALERT':          null
+    'BADCHARSET':     lookup({ ' ': badcharset_args, '': empty_resp() })
+    'CAPABILITY':     capability_args
+    'PARSE':          null
+    'PERMANENTFLAGS': permanentflags_args
+    'READ-ONLY':      null
+    'READ-WRITE':     null
+    'TRYCREATE':      null
+    'UIDNEXT':        space_num
+    'UIDVALIDITY':    space_num
+    'UNSEEN':         space_num
+  , parse [
+      atom()
+      lookup({' ': atom_args, '': null_resp() })
+    ]
 
-empty = ->
-  ->
-    (data) -> []
+  zip ['key', 'value'], text_codes
 
-atom_args = ->
-  parse [str(' '), textchar_str()], 1
+empty_resp  = -> -> (data) -> []
+null_resp   = -> -> (data) -> null
 
 flag_perm = ->
   slash_flags = lookup
@@ -150,9 +154,8 @@ flag_perm = ->
     '': atom()
 
   lookup
-    '\\': join(parse([str('\\'), slash_flags]))
+    '\\': join parse [str('\\'), slash_flags]
     '': atom()
-
 
 capability_data = ->
   space_list capability()
@@ -160,25 +163,16 @@ capability_data = ->
 capability = ->
   atom()
 
-
-
 crlf = ->
   join parse [
-    opt("\r"),
+    opt("\r")
     str("\n")
   ]
 
-bracket_wrap = (cb) ->
-  wrap '[', ']', cb
 
-paren_wrap = (cb) ->
-  wrap '(', ')', cb
-
-curly_wrap = (cb) ->
-  wrap '{', '}', cb
-
-
-
+bracket_wrap  = (cb) -> wrap '[', ']', cb
+paren_wrap    = (cb) -> wrap '(', ')', cb
+curly_wrap    = (cb) -> wrap '{', '}', cb
 
 
 
