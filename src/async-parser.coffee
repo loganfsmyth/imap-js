@@ -27,26 +27,32 @@ exports.Parser = class Parser extends Stream
   _greeting: () ->
     greet = greeting()
     @parser = (data) =>
+      @partial = true
       result = greet data
       return if not result
+      @partial = data.pos != data.buf.length
 
       console.log 'Greeting:'
       console.log result
 
-      @emit 'greeting', result
       @_response()
+      @emit 'greeting', result
+
       return
 
   _response: () ->
     resp = response()
     @parser = (data) =>
+      @partial = true
       result = resp data
       return if not result
+      @partial = data.pos != data.bud.length
 
       console.log 'Response:'
       console.log result
-      @emit 'response', result
       @_response()
+      @emit 'response', result
+
       return
 
   write: (buffer, encoding) ->
@@ -83,7 +89,9 @@ exports.Parser = class Parser extends Stream
 
   destroySoon: ->
     @writable = false
-    @destroy() if not @writing
+    if not @writing
+      if @partial then @emit 'error', new SyntaxError {pos:0,buf:new Buffer(0)},'destroy', 'Parser destroyed part-way through parsing'
+      @destroy()
     return
 
   destroy: ->

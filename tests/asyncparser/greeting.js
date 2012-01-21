@@ -63,6 +63,7 @@
     },
     "* OK [BADCHARSET ()] word\n": null,
     "* OK [BADCHARSET \"word\"] word\n": null,
+    "* OK [BADCHARSET (\"word)] word\n": null,
     "* OK [CAPABILITY IMAP4rev1] word\n": {
       'type': 'OK',
       'text-code': {
@@ -225,11 +226,11 @@
       } else {
         _results.push(cases[name + '_' + suf] = function(test) {
           p.on('greeting', function(greeting) {
-            test.ok(false, 'greeting unexpectedly successfully parsed');
+            test.ok(false, 'greeting unexpectedly successfully parsed.');
             return test.done();
           });
           p.on('error', function(err) {
-            test.ok(err instanceof parser.SyntaxError, 'Test threw a syntax error');
+            test.ok(err instanceof parser.SyntaxError, 'Test threw an error while parsing.');
             return test.done();
           });
           return wrt(new Buffer(str));

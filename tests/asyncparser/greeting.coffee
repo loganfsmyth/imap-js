@@ -21,8 +21,6 @@ tests =
   "*OK word\n": null
   "*OKword\n": null
   "* OKword\n": null
-# TODO This fails
-#  "* OK word \n": null
   "* OK [ALERT] word\n":
     'type': 'OK'
     'text-code':
@@ -51,8 +49,7 @@ tests =
     'text': new Buffer 'word'
   "* OK [BADCHARSET ()] word\n": null
   "* OK [BADCHARSET \"word\"] word\n": null
-# TODO: This should error out, not break testing
-#  "* OK [BADCHARSET (\"word)] word\n": null
+  "* OK [BADCHARSET (\"word)] word\n": null
   "* OK [CAPABILITY IMAP4rev1] word\n":
     'type': 'OK'
     'text-code':
@@ -174,10 +171,10 @@ for own str, expected of tests
       else
         cases[name + '_' + suf] = (test) ->
           p.on 'greeting', (greeting) ->
-            test.ok false, 'greeting unexpectedly successfully parsed'
+            test.ok false, 'greeting unexpectedly successfully parsed.'
             test.done()
           p.on 'error', (err) ->
-            test.ok err instanceof parser.SyntaxError, 'Test threw a syntax error'
+            test.ok err instanceof parser.SyntaxError, 'Test threw an error while parsing.'
             test.done()
           wrt new Buffer str
 
