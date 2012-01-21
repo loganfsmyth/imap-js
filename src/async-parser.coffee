@@ -120,11 +120,11 @@ exports.SyntaxError = class SyntaxError extends Error
 
 
 resp_text_code = ->
-  space_num           = parse [ str(' '), number(true) ], 1
-  badcharset_args     = parse [ str(' '), paren_wrap(space_list(astring())) ], 1
-  capability_args     = parse [ str(' '), capability_data() ], 1
-  permanentflags_args = parse [ str(' '), paren_wrap(space_list(flag_perm(), true)) ], 1
-  atom_args           = parse [ str(' '), textchar_str() ], 1
+  space_num           = series [ str(' '), number true ], 1
+  badcharset_args     = series [ str(' '), paren_wrap space_list astring() ], 1
+  capability_args     = series [ str(' '), capability_data() ], 1
+  permanentflags_args = series [ str(' '), paren_wrap space_list(flag_perm(), true) ], 1
+  atom_args           = series [ str(' '), textchar_str() ], 1
 
   text_codes = route
     'ALERT':          null
@@ -138,7 +138,7 @@ resp_text_code = ->
     'UIDNEXT':        space_num
     'UIDVALIDITY':    space_num
     'UNSEEN':         space_num
-  , parse [
+  , series [
       atom()
       lookup({' ': atom_args, '': null_resp() })
     ]
@@ -154,7 +154,7 @@ flag_perm = ->
     '': atom()
 
   lookup
-    '\\': join parse [str('\\'), slash_flags]
+    '\\': join series [str('\\'), slash_flags]
     '': atom()
 
 capability_data = ->
@@ -164,9 +164,9 @@ capability = ->
   atom()
 
 crlf = ->
-  join parse [
-    opt("\r")
-    str("\n")
+  join series [
+    opt "\r"
+    str "\n"
   ]
 
 
@@ -487,10 +487,10 @@ opt = (c) ->
         return new Buffer 0
 
 wrap = (open, close, cb) ->
-  parse [
-    str(open),
-    cb,
-    str(close),
+  series [
+    str open
+    cb
+    str close
   ], 1
 
 err = (data, rule, extra) ->
@@ -555,7 +555,7 @@ route = (routes, nomatch) ->
 
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
-parse = (parts, ids) ->
+series = (parts, ids) ->
   ->
     i = 0
     handler = parts[i]()
@@ -595,9 +595,9 @@ l = (data) ->
   console.log data.buf.toString('utf8', data.pos)
 
 greeting = do ->
-  text_code = parse [ bracket_wrap(resp_text_code()), str(' ') ], 0
+  text_code = series [ bracket_wrap(resp_text_code()), str(' ') ], 0
 
-  zip [ null, 'type', null, 'text-code', 'text'], parse [
+  zip [ null, 'type', null, 'text-code', 'text'], series [
     str('* '),
     oneof(['OK', 'PREAUTH', 'BYE']),
     str(' '),
