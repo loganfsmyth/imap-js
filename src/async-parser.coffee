@@ -119,17 +119,6 @@ exports.SyntaxError = class SyntaxError extends Error
       "  " + (" " for i in [0...pos]).join('') + "^\n"
 
 
-
-ifset = (c, cb) ->
-  code = c.charCodeAt 0
-  ->
-    handler = null
-    (data) ->
-      if not handler
-        return null if data.buf[data.pos] != code
-        handler = cb()
-      handler data
-
 resp_text_code = ->
   space_num = parse [str(' '), nz_number()], 1
   badcharset = parse [str(' '), paren_wrap(space_list(astring()))], 1
@@ -152,26 +141,6 @@ empty = ->
   ->
     (data) -> []
 
-textchar_str = ->
-  chars = text_chars()
-  brac = ']'.charCodeAt 0
-  ->
-    col = collector()
-    (data) ->
-      for code, i in data.buf[data.pos...]
-        if code not in chars or code == brac
-          col data.buf[data.pos...data.pos+i]
-          data.pos += i
-          all = col()
-
-          return all if all
-
-          err data, 'textchar_str', 'textchar_strings must have at least one value'
-
-      col data.buf[data.pos...]
-      data.pos = data.length
-
-
 atom_args = ->
   parse [str(' '), textchar_str()], 1
 
@@ -190,6 +159,49 @@ capability_data = ->
 
 capability = ->
   atom()
+
+
+
+crlf = ->
+  join parse [
+    opt("\r"),
+    str("\n")
+  ]
+
+bracket_wrap = (cb) ->
+  wrap '[', ']', cb
+
+paren_wrap = (cb) ->
+  wrap '(', ')', cb
+
+curly_wrap = (cb) ->
+  wrap '{', '}', cb
+
+
+
+
+
+
+###################### Data Type helpers ###############
+
+textchar_str = ->
+  chars = text_chars()
+  brac = ']'.charCodeAt 0
+  ->
+    col = collector()
+    (data) ->
+      for code, i in data.buf[data.pos...]
+        if code not in chars or code == brac
+          col data.buf[data.pos...data.pos+i]
+          data.pos += i
+          all = col()
+
+          return all if all
+
+          err data, 'textchar_str', 'textchar_strings must have at least one value'
+
+      col data.buf[data.pos...]
+      data.pos = data.length
 
 atom = ->
   ->
@@ -213,21 +225,52 @@ astring = ->
     '': astring_str(),
   }
 
-lookup = (map) ->
-  for own k,v of map
-    delete map[k]
-    if k == ''
-      map[0] = v
-    else
-      k = k.charCodeAt 0
-      map[k] = v
+text = ->
+  cr = "\r".charCodeAt 0
+  lf = "\n".charCodeAt 0
   ->
-    handler = null
+    bufs = []
+    col = collector()
     (data) ->
-      if not handler
-        c = data.buf[data.pos]
-        handler = if map[c] then map[c]() else map[0]()
-      handler data
+      for c, i in data.buf[data.pos...]
+        if c in [cr, lf]
+          col data.buf[data.pos...data.pos + i]
+          data.pos += i
+          all = col()
+          return all if all
+
+          err data, 'text', 'text must contain at least one character'
+
+      col data.buf[data.pos...]
+      data.pos = data.buf.length
+      return
+
+nz_number = ->
+  ->
+    i = 0
+    str = ''
+    (data) ->
+      for code in data.buf[data.pos...]
+        if i == 0 and code not in [ 0x31 .. 0x39 ]
+          err data, 'nz_number', 'First digit must be between 1 and 9'
+        if code not in [ 0x30 .. 0x39 ]
+          return parseInt str, 10
+        data.pos += 1
+        i += 1
+        str += String.fromCharCode code
+
+number = ->
+  ->
+    i = 0
+    str = ''
+    (data) ->
+      for code in data.buf[data.pos...]
+        if code not in [ 0x30 .. 0x39 ]
+          if i == 0 then err data, 'nz_number', 'First digit must be between 1 and 9'
+          else return parseInt str, 10
+        data.pos += 1
+        i += 1
+        str += String.fromCharCode code
 
 string = ->
   lookup {
@@ -337,6 +380,21 @@ astring_str = ->
       col data.buf[data.pos...]
       data.pos = data.length
 
+# Match a given string
+str = (s) ->
+  buffer = new Buffer s
+  ->
+    i = 0
+    (data) ->
+      {pos, buf} = data
+      while pos < buf.length and i < buffer.length
+        err data, 'str', 'failed to match ' + s if buf[pos] != buffer[i]
+        i += 1
+        pos += 1
+      data.pos = pos
+
+      if i == buffer.length
+        return buffer
 
 collector = ->
   buffers = []
@@ -359,6 +417,9 @@ collector = ->
       length += b.length
       buffers.push b
     return
+
+
+############## Character Set functions  #############
 
 list_wildcards = do -> 
   b = new Buffer '%*'
@@ -406,6 +467,50 @@ text_chars = do ->
   b = new Buffer (c for c in [0x01..0x7F] when c != 10 and c != 13) # all except \r and \n
   -> b
 
+
+
+
+####################### Parser Helpers  ################
+
+lookup = (map) ->
+  for own k,v of map
+    delete map[k]
+    if k == ''
+      map[0] = v
+    else
+      k = k.charCodeAt 0
+      map[k] = v
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        c = data.buf[data.pos]
+        handler = if map[c] then map[c]() else map[0]()
+      handler data
+
+
+# Use one parser if the buffer starts with one char, and another if not
+starts_with = (c, y, n) ->
+  code = c.charCodeAt 0
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        start = false
+        handler = y() if data.buf[data.pos] == code else n()
+      handler data
+
+ifset = (c, cb) ->
+  code = c.charCodeAt 0
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        return null if data.buf[data.pos] != code
+        handler = cb()
+      handler data
+
+
 space_list = (cb, none) ->
   sp = ' '.charCodeAt 0
   paren = ')'.charCodeAt 0
@@ -439,105 +544,6 @@ space_list = (cb, none) ->
       space = true
       return
 
-nz_number = ->
-  ->
-    i = 0
-    str = ''
-    (data) ->
-      for code in data.buf[data.pos...]
-        if i == 0 and code not in [ 0x31 .. 0x39 ]
-          err data, 'nz_number', 'First digit must be between 1 and 9'
-        if code not in [ 0x30 .. 0x39 ]
-          return parseInt str, 10
-        data.pos += 1
-        i += 1
-        str += String.fromCharCode code
-
-number = ->
-  ->
-    i = 0
-    str = ''
-    (data) ->
-      for code in data.buf[data.pos...]
-        if code not in [ 0x30 .. 0x39 ]
-          if i == 0 then err data, 'nz_number', 'First digit must be between 1 and 9'
-          else return parseInt str, 10
-        data.pos += 1
-        i += 1
-        str += String.fromCharCode code
-
-
-text = ->
-  cr = "\r".charCodeAt 0
-  lf = "\n".charCodeAt 0
-  ->
-    bufs = []
-    col = collector()
-    (data) ->
-      for c, i in data.buf[data.pos...]
-        if c in [cr, lf]
-          col data.buf[data.pos...data.pos + i]
-          data.pos += i
-          all = col()
-          return all if all
-
-          err data, 'text', 'text must contain at least one character'
-
-      col data.buf[data.pos...]
-      data.pos = data.buf.length
-      return
-
-
-crlf = ->
-  join parse [
-    opt("\r"),
-    str("\n")
-  ]
-
-
-
-bracket_wrap = (cb) ->
-  wrap '[', ']', cb
-
-paren_wrap = (cb) ->
-  wrap '(', ')', cb
-
-curly_wrap = (cb) ->
-  wrap '{', '}', cb
-
-l = (data) ->
-  console.log data.buf[data.pos...]
-  console.log data.buf.toString('utf8', data.pos)
-
-
-####################### Parser Helpers  ################
-
-# Use one parser if the buffer starts with one char, and another if not
-starts_with = (c, y, n) ->
-  code = c.charCodeAt 0
-  ->
-    handler = null
-    (data) ->
-      if not handler
-        start = false
-        handler = y() if data.buf[data.pos] == code else n()
-      handler data
-
-# Match a given string
-str = (s) ->
-  buffer = new Buffer s
-  ->
-    i = 0
-    (data) ->
-      {pos, buf} = data
-      while pos < buf.length and i < buffer.length
-        err data, 'str', 'failed to match ' + s if buf[pos] != buffer[i]
-        i += 1
-        pos += 1
-      data.pos = pos
-
-      if i == buffer.length
-        return buffer
 
 opt = (c) ->
   code = c.charCodeAt 0
@@ -653,7 +659,9 @@ zip = (keys, cb) ->
       return ret
 
 
-
+l = (data) ->
+  console.log data.buf[data.pos...]
+  console.log data.buf.toString('utf8', data.pos)
 
 greeting = do ->
   text_code = parse [ bracket_wrap(resp_text_code()), str(' ') ], 0
