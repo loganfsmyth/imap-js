@@ -38,14 +38,6 @@
       'type': 'FLAGS',
       'value': [b('\\Unseen'), b('\\Answered')]
     },
-    "* LIST ()\n \"/\" INBOX\n": {
-      'type': 'LIST',
-      'value': {
-        'flags': [],
-        'char': b('/'),
-        'mailbox': b('INBOX')
-      }
-    },
     "* LIST (\\Marked \\Noselect) \"G\" INBOX\n": {
       'type': 'LIST',
       'value': {
@@ -60,14 +52,6 @@
         'flags': [b('\\Marked'), b('\\Noselect')],
         'char': null,
         'mailbox': b('INBOX')
-      }
-    },
-    "* LSUB () NIL otherbox\n": {
-      'type': 'LIST',
-      'value': {
-        'flags': [],
-        'char': null,
-        'mailbox': b('otherbox')
       }
     },
     "* SEARCH\n": {
@@ -87,14 +71,14 @@
       'type': 'STATUS',
       'value': {
         'mailbox': b('INBOX'),
-        'flags': {}
+        'attributes': {}
       }
     },
     "* STATUS INBOX (MESSAGES 5 RECENT 6 UIDNEXT 7)\n": {
       'type': 'STATUS',
       'value': {
         'mailbox': b('INBOX'),
-        'flags': {
+        'attributes': {
           'MESSAGES': 5,
           'RECENT': 6,
           'UIDNEXT': 7
@@ -111,7 +95,6 @@
       'id': 5,
       'value': null
     },
-    "* 0 EXPUNGE\n": null,
     "* 3 EXPUNGE\n": {
       'type': 'EXPUNGE',
       'id': 3,
@@ -120,21 +103,21 @@
     "* 5 FETCH ()\n": null,
     "* 5 FETCH (FLAGS ())\n": {
       'type': 'FETCH',
-      'count': 5,
+      'id': 5,
       'value': {
         'FLAGS': []
       }
     },
     "* 5 FETCH (FLAGS (\\Unanswered \\Marked))\n": {
       'type': 'FETCH',
-      'count': 5,
+      'id': 5,
       'value': {
-        'FLAGS': ['\\Unanswered', '\\Marked']
+        'FLAGS': [b('\\Unanswered'), b('\\Marked')]
       }
     },
     "* 5 FETCH (ENVELOPE (\"date\" \"subject\" NIL NIL NIL NIL NIL NIL NIL NIL))\n": {
       'type': 'FETCH',
-      'count': 5,
+      'id': 5,
       'value': {
         'ENVELOPE': {
           'date': b('date'),
@@ -152,22 +135,22 @@
     },
     "* 5 FETCH (ENVELOPE (\"date\" \"subject\" ((\"name\" \"adl\" \"mailbox\" \"host\")(\"name2\" \"adl2\" \"mailbox2\" \"host2\")) NIL NIL NIL NIL NIL NIL NIL))\n": {
       'type': 'FETCH',
-      'count': 5,
+      'id': 5,
       'value': {
         'ENVELOPE': {
           'date': b('date'),
           'subject': b('subject'),
           'from': [
             {
-              'name': 'name',
-              'adl': 'adl',
-              'mailbox': 'mailbox',
-              'host': 'host'
+              'name': b('name'),
+              'adl': b('adl'),
+              'mailbox': b('mailbox'),
+              'host': b('host')
             }, {
-              'name': 'name2',
-              'adl': 'adl2',
-              'mailbox': 'mailbox2',
-              'host': 'host2'
+              'name': b('name2'),
+              'adl': b('adl2'),
+              'mailbox': b('mailbox2'),
+              'host': b('host2')
             }
           ],
           'sender': null,
@@ -184,28 +167,28 @@
       'type': 'FETCH',
       'id': 5,
       'value': {
-        'INTERNALDATE': '10-Jan-2012 12:11:10 -0500'
+        'INTERNALDATE': b('10-Jan-2012 12:11:10 -0500')
       }
     },
     "* 5 FETCH (RFC822 \"rfc\")\n": {
       'type': 'FETCH',
       'id': 5,
       'value': {
-        'RFC822': 'rfc'
+        'RFC822': b('rfc')
       }
     },
     "* 5 FETCH (RFC822.HEADER \"rfc\")\n": {
       'type': 'FETCH',
       'id': 5,
       'value': {
-        'RFC822.HEADER': 'rfc'
+        'RFC822.HEADER': b('rfc')
       }
     },
     "* 5 FETCH (RFC822.TEXT \"rfc\")\n": {
       'type': 'FETCH',
       'id': 5,
       'value': {
-        'RFC822.TEXT': 'rfc'
+        'RFC822.TEXT': b('rfc')
       }
     },
     "* 5 FETCH (RFC822.SIZE 10000)\n": {
@@ -219,9 +202,10 @@
       'type': 'FETCH',
       'id': 5,
       'value': {
-        'BODY[HEADER]': {
-          'number': 5,
-          'value': 'word'
+        'BODY[HEADER]<5>': {
+          'section': [b('HEADER')],
+          'partial': 5,
+          'value': b('word')
         }
       }
     },
@@ -230,19 +214,24 @@
       'id': 5,
       'value': {
         'BODYSTRUCTURE': {
-          'type': 'type',
-          'subtype': 'subtype',
-          'md5': 'md5',
+          'type': b('type'),
+          'subtype': b('subtype'),
+          'md5': b('md5'),
           'dsp': {
-            'name': 'name',
-            'value': {
-              'key': 'val',
-              'key2': 'value2'
-            }
+            'name': b('name'),
+            'values': [
+              {
+                'key': b('key'),
+                'value': b('val')
+              }, {
+                'key': b('key2'),
+                'value': b('value2')
+              }
+            ]
           },
-          'lang': 'lang',
-          'loc': 'loc',
-          'ext': ['ext', 14]
+          'lang': b('lang'),
+          'loc': b('loc'),
+          'ext': [b('ext'), 14]
         }
       }
     },

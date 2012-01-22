@@ -202,7 +202,7 @@ response_data_types = ->
     text()
   ], [1,2]
 
-  zip ['key', 'val'], route {
+  cb = route {
     # cond-state
     "OK": resp_text
     "NO": resp_text
@@ -213,16 +213,36 @@ response_data_types = ->
     "FLAGS": series [ sp(), flag_list() ], 1
     "LIST": series [ sp(), mailbox_list() ], 1
     "LSUB": series [ sp(), mailbox_list() ], 1
-    "SEARCH": ifset ' ', series([ sp(), space_list(number(true)) ], 1)
-    "STATUS": series [
+    "SEARCH": starts_with ' ', series([ sp(), space_list(number(true)) ], 1), empty_resp()
+    "STATUS": zip [null, 'mailbox', null, 'attributes'], series [
       sp()
       mailbox()
       sp()
-      paren_wrap status_att_list()
-    ], [1, 3]
+      onres paren_wrap(status_att_list()), (result) ->
+        obj = {}
+        for r in result
+          obj[r[0]] = r[1]
+        return obj
+    ]
     # capability-data
     "CAPABILITY": capability_args()
   }, response_numeric_types()
+
+
+  onres cb, (result) ->
+    key = result[0].toString 'ascii'
+    switch key
+      when 'OK', 'NO', 'BAD', 'BYE'
+        'type': key
+        'text-code': result[1][0]
+        'text': result[1][1]
+      when 'CAPABILITY', 'FLAGS', 'LIST', 'LSUB', 'SEARCH', 'STATUS'
+        'type': key
+        'value': result[1]
+      else
+        'type': key
+        'value': result[1]
+        'id': parseInt result[2], 10
 
 response_numeric_types = () ->
     # number EXISTS | RECENT
@@ -241,8 +261,8 @@ response_numeric_types = () ->
 
   onres cb, (result, num) ->
     # TODO check num nz for expunge and fetch
-    [result[0], { 'id': num, 'value': result[1]} ]
-
+    result.push num
+    result
 
 sp = cache ->
   str ' '
@@ -264,7 +284,7 @@ msg_att = ->
   ]
 
 
-  paren_wrap space_list route
+  cb = paren_wrap space_list route
     'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), true)) ], 1
     'ENVELOPE': series [ sp(), envelope() ], 1
     'INTERNALDATE': series [ sp(), date_time() ], 1
@@ -275,6 +295,14 @@ msg_att = ->
     'BODYSTRUCTURE': body_struc
     'BODY': starts_with ' ', body_struc, body_section_data
     'UID': series [ sp(), uniqueid() ], 1
+
+  onres cb, (result) ->
+    obj = {}
+    console.log '----', result
+    for r in result
+      k = r[0].toString 'ascii'
+      obj[k] = r[1]
+    return obj
 
 envelope = ->
   cb = paren_wrap series [
@@ -387,7 +415,7 @@ body_ext_mpart = ->
   ]
 
 body_ext_1part = ->
-  zip ['md5', 'dsp', 'lang', 'loc', 'ext'], series [
+  series [
     body_fld_md5()
     ifset ' ', series [ sp(), body_fld_dsp() ], 1
     ifset ' ', series [ sp(), body_fld_lang() ], 1
@@ -397,16 +425,16 @@ body_ext_1part = ->
 
 body_fld_md5 = -> nstring()
 body_fld_dsp = ->
-  params = paren_wrap series [
+  params = zip ['name', null, 'values'], paren_wrap series [
     string()
     sp()
     body_fld_param()
-  ], [0, 2]
+  ]
 
   starts_with '(', params, nil()
 
 body_fld_param = ->
-  paren_wrap space_list zip ['k', null, 'v'], series [ string(), sp(), string() ]
+  paren_wrap space_list zip ['key', null, 'value'], series [ string(), sp(), string() ]
 
 body_fld_lang = ->
   starts_with '(', paren_wrap(space_list(string())), nstring()
@@ -444,7 +472,15 @@ body_type_1part = ->
     media_subtype()
     ifset ' ', series [ sp(), body_ext_1part() ], 1
   ]
-  zip ['type', null, 'subtype', 'ext'], cb
+
+  onres cb, (result) ->
+    'type': result[0]
+    'subtype': result[2]
+    'md5': result[3] and result[3][0]
+    'dsp': result[3] and result[3][1]
+    'lang': result[3] and result[3][2]
+    'loc': result[3] and result[3][3]
+    'ext': result[3] and result[3][4]
 
 
 body = cache ->
@@ -515,13 +551,13 @@ flag_list = ->
   paren_wrap space_list flag(), true
 
 mailbox_list = ->
-  series [
+  zip [ 'flags', null, 'char', null, 'mailbox' ], series [
     paren_wrap mbx_list_flags()
     sp()
     starts_with '"', quoted_char(), nil()
     sp()
     mailbox()
-  ], [0, 2, 4]
+  ]
 
 mbx_list_flags = ->
   space_list join(series [ str('\\'), atom() ]), true
