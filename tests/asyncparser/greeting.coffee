@@ -1,6 +1,4 @@
 
-{testCase} = require 'nodeunit'
-parser = require '../../lib/async-parser'
 
 
 tests =
@@ -137,50 +135,5 @@ tests =
       'value': null
      'text': new Buffer 'word'
 
-
-swrite = (b) ->
-  for i in [0...b.length]
-    p.write b[i...i+1]
-  p.end()
-
-pwrite = (b) ->
-  p.write b
-  p.end()
-
-p = null
-
-cases =
-  setUp: (cb) ->
-    p = parser.createParser parser.TYPE_CLIENT
-    cb()
-
-for own str, expected of tests
-  do (str, expected) ->
-    for own suf, wrt of {'split':swrite, 'single': pwrite}
-      name = str.replace /[\r\n]/g, '_'
-      
-      if expected
-        cases[name + '_' + suf] = (test) ->
-          p.on 'greeting', (greeting) ->
-            test.deepEqual greeting, expected, 'Response matches expected value.'
-            test.done()
-          p.on 'error', (err) ->
-            test.ok false, err.toString()
-            test.done()
-          wrt new Buffer str
-      else
-        cases[name + '_' + suf] = (test) ->
-          p.on 'greeting', (greeting) ->
-            test.ok false, 'greeting unexpectedly successfully parsed.'
-            test.done()
-          p.on 'error', (err) ->
-            test.ok err instanceof parser.SyntaxError, 'Test threw an error while parsing.'
-            test.done()
-          wrt new Buffer str
-
-
-
-console.log cases
-
-module.exports = testCase cases
+module.exports = require('./helper').genTests('greeting', tests)
 

@@ -1,10 +1,5 @@
 (function() {
-  var cases, expected, p, parser, pwrite, str, swrite, testCase, tests, _fn,
-    __hasProp = Object.prototype.hasOwnProperty;
-
-  testCase = require('nodeunit').testCase;
-
-  parser = require('../../lib/async-parser');
+  var tests;
 
   tests = {
     "* OK word\n": {
@@ -178,75 +173,6 @@
     }
   };
 
-  swrite = function(b) {
-    var i, _ref;
-    for (i = 0, _ref = b.length; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
-      p.write(b.slice(i, (i + 1)));
-    }
-    return p.end();
-  };
-
-  pwrite = function(b) {
-    p.write(b);
-    return p.end();
-  };
-
-  p = null;
-
-  cases = {
-    setUp: function(cb) {
-      p = parser.createParser(parser.TYPE_CLIENT);
-      return cb();
-    }
-  };
-
-  _fn = function(str, expected) {
-    var name, suf, wrt, _ref, _results;
-    _ref = {
-      'split': swrite,
-      'single': pwrite
-    };
-    _results = [];
-    for (suf in _ref) {
-      if (!__hasProp.call(_ref, suf)) continue;
-      wrt = _ref[suf];
-      name = str.replace(/[\r\n]/g, '_');
-      if (expected) {
-        _results.push(cases[name + '_' + suf] = function(test) {
-          p.on('greeting', function(greeting) {
-            test.deepEqual(greeting, expected, 'Response matches expected value.');
-            return test.done();
-          });
-          p.on('error', function(err) {
-            test.ok(false, err.toString());
-            return test.done();
-          });
-          return wrt(new Buffer(str));
-        });
-      } else {
-        _results.push(cases[name + '_' + suf] = function(test) {
-          p.on('greeting', function(greeting) {
-            test.ok(false, 'greeting unexpectedly successfully parsed.');
-            return test.done();
-          });
-          p.on('error', function(err) {
-            test.ok(err instanceof parser.SyntaxError, 'Test threw an error while parsing.');
-            return test.done();
-          });
-          return wrt(new Buffer(str));
-        });
-      }
-    }
-    return _results;
-  };
-  for (str in tests) {
-    if (!__hasProp.call(tests, str)) continue;
-    expected = tests[str];
-    _fn(str, expected);
-  }
-
-  console.log(cases);
-
-  module.exports = testCase(cases);
+  module.exports = require('./helper').genTests('greeting', tests);
 
 }).call(this);
