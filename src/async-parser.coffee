@@ -123,6 +123,15 @@ exports.SyntaxError = class SyntaxError extends Error
       "==" + buf.toString('utf8', start, end) + "==\n" +
       "  " + (" " for i in [0...pos]).join('') + "^\n"
 
+cache = (func) ->
+  cb = null
+  ->
+    ->
+      if not cb
+        cb = func()
+        console.log cb
+      cb()
+
 greeting = ->
   zip [ null, 'type', null, 'text-code', 'text'], series [
     str('* '),
@@ -133,8 +142,6 @@ greeting = ->
     crlf()
   ]
 
-text_code = ->
-  series [ bracket_wrap(resp_text_code()), str(' ') ], 0
 
 response = ->
   zip ['type', 'response'], lookup
@@ -235,7 +242,12 @@ response_numeric_types = () ->
     [result[0], { 'id': num, 'value': result[1]} ]
 
 
-sp = -> str ' '
+sp = cache ->
+  str ' '
+
+text_code = cache ->
+  series [ bracket_wrap(resp_text_code()), str(' ') ], 0
+
 
 msg_att = ->
 
@@ -327,7 +339,7 @@ time = ->
 zone = ->
   series [ oneof(['-', '+']), digits(4) ]
 
-nstring = ->
+nstring = cache ->
   starts_with 'N', nil(), string()
 
 address = ->
@@ -361,14 +373,7 @@ digits = (num) ->
       return
 
 
-cache = (func) ->
-  cb = null
-  ->
-    ->
-      if not cb
-        cb = func()
-        console.log cb
-      cb()
+
 
 body_ext_mpart = ->
   zip ['param', 'dsp', 'lang', 'loc', 'ext'], series [
@@ -520,7 +525,7 @@ mailbox_list = ->
 mbx_list_flags = ->
   space_list join(series [ str('\\'), atom() ]), true
 
-nil = ->
+nil = cache ->
   onres str('NIL'), (result) ->
     return null
 
@@ -555,7 +560,7 @@ quoted_char_inner = ->
         err data, 'quoted_char_inner', 'Only quotes and slashes can be escaped'
 
 
-mailbox = ->
+mailbox = cache ->
   astring()
 
 status_att_list = ->
@@ -635,7 +640,7 @@ capability_data = ->
 capability = ->
   atom()
 
-crlf = ->
+crlf = cache ->
   join series [
     opt "\r"
     str "\n"
@@ -650,7 +655,7 @@ curly_wrap    = (cb) -> wrap '{', '}', cb
 
 ###################### Data Type helpers ###############
 
-astring = ->
+astring = cache ->
   lookup {
     '{': string(),
     '"': string(),
@@ -672,7 +677,7 @@ number = (nz) ->
         i += 1
         str += String.fromCharCode code
 
-string = ->
+string = cache ->
   lookup {
     '{': literal(),
     '"': quoted(),
@@ -681,7 +686,7 @@ string = ->
         err data, 'string', 'Expected a { or " at the start of the string.'
   }
 
-quoted = ->
+quoted = cache ->
   wrap '"', '"', quoted_inner()
 
 collect_until = (cb, none) ->
@@ -708,14 +713,14 @@ textchar_str = ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars or code == brac
 
-atom = ->
+atom = cache ->
   chars = atom_chars()
   collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
 
 
-text = ->
+text = cache ->
   cr = "\r".charCodeAt 0
   lf = "\n".charCodeAt 0
   collect_until -> (data) ->
