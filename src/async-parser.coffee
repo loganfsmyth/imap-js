@@ -349,8 +349,87 @@ digits = (num) ->
       return
 
 
-body = ->
-  
+cache = (func) ->
+  cb = null
+  ->
+    ->
+      if not cb
+        cb = func()
+        console.log cb
+      cb()
+
+body_ext_mpart = ->
+  zip ['param', 'dsp', 'lang', 'loc', 'ext'], series [
+    body_fld_param()
+    ifset ' ', series [ sp(), body_fld_dsp() ], 1
+    ifset ' ', series [ sp(), body_fld_lang() ], 1
+    ifset ' ', series [ sp(), body_fld_loc() ], 1
+    ifset ' ', series [ sp(), body_extension() ], 1
+  ]
+
+body_ext_1part = ->
+  zip ['md5', 'dsp', 'lang', 'loc', 'ext'], series [
+    body_fld_md5()
+    ifset ' ', series [ sp(), body_fld_dsp() ], 1
+    ifset ' ', series [ sp(), body_fld_lang() ], 1
+    ifset ' ', series [ sp(), body_fld_loc() ], 1
+    ifset ' ', series [ sp(), body_extension() ], 1
+  ]
+
+body_fld_md5 = -> nstring()
+body_fld_dsp = ->
+  params = paren_wrap series [
+    string()
+    sp()
+    body_fld_param()
+  ], [0, 2]
+
+  starts_with '(', params, nil()
+
+body_fld_param = ->
+  paren_wrap space_list zip ['k', null, 'v'], series [ string(), sp(), string() ]
+
+body_fld_lang = ->
+  starts_with '(', paren_wrap(space_list(string())), nstring()
+
+body_fld_loc = ->
+  nstring()
+
+body_extension = cache ->
+  map = {}
+  for n in [0..9]
+    map[n] = number()
+
+  map['('] = paren_wrap space_list body_extension()
+  map[''] = nstring()
+
+  lookup map
+
+
+media_subtype = ->
+  string()
+
+body_type_mpart = ->
+  series [
+    nosep_list(-> do body())
+    sp()
+    media_subtype()
+    ifset ' ', series [sp(), body_ext_mpart()], 1
+  ], [0, 2, 3]
+
+
+body_type_1part = ->
+  cb = series [
+    string()
+    sp()
+    media_subtype()
+    ifset ' ', series [ sp(), body_ext_1part() ], 1
+  ]
+  zip ['type', null, 'subtype', 'ext'], cb
+
+
+body = cache ->
+  paren_wrap starts_with '(', body_type_mpart(), body_type_1part()
 
 section = ->
   bracket_wrap section_spec()
