@@ -136,7 +136,7 @@ greeting = ->
   zip [ null, 'type', null, 'text-code', 'text'], series [
     str('* '),
     oneof(['OK', 'PREAUTH', 'BYE']),
-    str(' '),
+    sp()
     ifset('[', text_code()),
     text(),
     crlf()
@@ -153,9 +153,9 @@ response = ->
 response_tagged = ->
   cb = series [
     tag()
-    str ' '
+    sp()
     oneof ['OK', 'PREAUTH', 'BYE']
-    str ' '
+    sp()
     ifset '[', text_code()
     text()
     crlf()
@@ -196,7 +196,7 @@ response_untagged = ->
 
 response_data_types = ->
   resp_text = series [
-    str ' '
+    sp()
     ifset '[', text_code()
     text()
   ], [1,2]
@@ -209,14 +209,14 @@ response_data_types = ->
 # cond-bye
     "BYE": resp_text
 #mailbox-data
-    "FLAGS": series [ str(' '), flag_list() ], 1
-    "LIST": series [ str(' '), mailbox_list() ], 1
-    "LSUB": series [ str(' '), mailbox_list() ], 1
-    "SEARCH": ifset ' ', series([ str(' '), space_list(number(true)) ], 1)
+    "FLAGS": series [ sp(), flag_list() ], 1
+    "LIST": series [ sp(), mailbox_list() ], 1
+    "LSUB": series [ sp(), mailbox_list() ], 1
+    "SEARCH": ifset ' ', series([ sp(), space_list(number(true)) ], 1)
     "STATUS": series [
-      str ' '
+      sp()
       mailbox()
-      str ' '
+      sp()
       paren_wrap status_att_list()
     ], [1, 3]
     # number EXISTS | RECENT
@@ -231,10 +231,10 @@ response_numeric_types = () ->
     'EXISTS': null
     'RECENT': null
     'EXPUNGE': null
-    'FETCH': series [ str(' '), msg_att() ], 1
+    'FETCH': series [ sp(), msg_att() ], 1
 
   cb = series [
-    str ' '
+    sp()
     types
   ], 1
 
@@ -243,10 +243,10 @@ response_numeric_types = () ->
 
 
 sp = cache ->
-  str ' '
+  sp()
 
 text_code = cache ->
-  series [ bracket_wrap(resp_text_code()), str(' ') ], 0
+  series [ bracket_wrap(resp_text_code()), sp() ], 0
 
 
 msg_att = ->
@@ -516,9 +516,9 @@ flag_list = ->
 mailbox_list = ->
   series [
     paren_wrap mbx_list_flags()
-    str ' '
+    sp()
     starts_with '"', quoted_char(), nil()
-    str ' '
+    sp()
     mailbox()
   ], [0, 2, 4]
 
@@ -572,7 +572,7 @@ status_att_list = ->
       'UIDVALIDITY'
       'UNSEEN'
     ]
-    str ' '
+    sp()
     number()
   ], [0, 2]
 
@@ -586,13 +586,13 @@ tag = ->
       return i if code not in chars
 
 resp_text_code = ->
-  space_num           = series [ str(' '), number true ], 1
-  badcharset_args     = series [ str(' '), paren_wrap space_list astring() ], 1
+  space_num           = series [ sp(), number true ], 1
+  badcharset_args     = series [ sp(), paren_wrap space_list astring() ], 1
 
-  permanentflags_args = series [ str(' '), paren_wrap space_list(flag(true), true) ], 1
+  permanentflags_args = series [ sp(), paren_wrap space_list(flag(true), true) ], 1
 
   atom_args = lookup
-    ' ': series [ str(' '), textchar_str() ], 1
+    ' ': series [ sp(), textchar_str() ], 1
     '': null_resp()
 
   text_codes = route
@@ -632,7 +632,7 @@ flag = (star) ->
     '': atom()
 
 capability_args = ->
-  series [ str(' '), capability_data() ], 1
+  series [ sp(), capability_data() ], 1
 
 capability_data = ->
   space_list capability()
