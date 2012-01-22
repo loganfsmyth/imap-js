@@ -227,17 +227,28 @@ sp = -> str ' '
 
 msg_att = ->
 
+  body_struc = series [ sp(), body() ], 1
+  rfc_text = series [ sp(), nstring() ], 1
+
+  body_section_data = series [
+    section()
+    starts_with '<', wrap('<', '>', number()), null_resp()
+    sp()
+    nstring()
+  ]
+
+
   paren_wrap space_list route
     'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), true)) ], 1
     'ENVELOPE': series [ sp(), envelope() ], 1
     'INTERNALDATE': series [ sp(), date_time() ], 1
-    'RFC822': series [ sp(), nstring() ], 1
-    'RFC822.HEADER': series [ sp(), nstring() ], 1
-    'RFC822.TEXT': series [ sp(), nstring() ], 1
+    'RFC822': rfc_text
+    'RFC822.HEADER': rfc_text
+    'RFC822.TEXT': rfc_text
     'RFC822.SIZE': series [ sp(), number() ], 1
-    'BODYSTRUCTURE': series [ sp(), body() ], 1
-    'BODY': starts_with ' ', series([ sp(), body() ]), series([ section(), starts_with('<', wrap('<', '>', number()), null_resp()), sp(), nstring() ])
-    'UID': series [ str(' '), uniqueid() ], 1
+    'BODYSTRUCTURE': body_struc
+    'BODY': starts_with ' ', body_struc, body_section_data
+    'UID': series [ sp(), uniqueid() ], 1
 
 envelope = ->
   cb = paren_wrap series [
@@ -347,8 +358,8 @@ section = ->
 section_msgtext = ->
   route
     "HEADER": null
-    "HEADER.FIELDS": series [ sp(), header_list() ]
-    "HEADER.FIELDS.NOT": series [ sp(), header_list() ]
+    "HEADER.FIELDS": series [ sp(), header_list() ], 1
+    "HEADER.FIELDS.NOT": series [ sp(), header_list() ], 1
     "TEXT": null
 
 section_spec = ->
@@ -356,8 +367,10 @@ section_spec = ->
   section_msgtext()
 
 header_list = ->
-  ->
-    
+  paren_wrap space_list header_fld_name()
+
+header_fld_name = ->
+  astring()
 
 
 uniqueid = ->
@@ -868,9 +881,10 @@ route_key = ->
   upper = [0x41..0x5A]
   lower = [0x61..0x7A]
   dash = '-'.charCodeAt 0
+  dot = '.'.charCodeAt 0
   collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
-      return i if code != dash and code not in nums and code not in upper and code not in lower
+      return i if code not in [dash,dot] and code not in nums and code not in upper and code not in lower
 
 route = (routes, nomatch) ->
   key_cb = route_key()
