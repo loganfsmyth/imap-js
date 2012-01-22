@@ -36,8 +36,8 @@ exports.Parser = class Parser extends Stream
       return if not result
       @partial = data.pos != data.buf.length
 
-      console.log 'Greeting:'
-      console.log result
+      #console.log 'Greeting:'
+      #console.log result
 
       @_response()
       @emit 'greeting', result
@@ -52,9 +52,9 @@ exports.Parser = class Parser extends Stream
       return if not result
       @partial = data.pos != data.buf.length
 
-      console.log 'Response:'
+      #console.log 'Response:'
       #console.log result
-      print result
+      #print result
       @_response()
       
       {type, response} = result
@@ -131,7 +131,6 @@ cache = (func) ->
     ->
       if not cb
         cb = func()
-        console.log cb
       cb()
 
 greeting = ->
@@ -156,7 +155,7 @@ response_tagged = ->
   cb = series [
     tag()
     sp()
-    oneof ['OK', 'PREAUTH', 'BYE']
+    oneof ['OK', 'NO', 'BAD']
     sp()
     ifset '[', text_code()
     text()
@@ -489,7 +488,6 @@ section_parts = ->
         
         data.pos += 1
         next_cb = (data) ->
-          console.log data
           if data.buf[data.pos] in codes
             tmp = onres section_msgtext(true), (result) ->
               return [result]
@@ -953,7 +951,6 @@ space_list = (cb, none) ->
 
       if space
         if data.buf[data.pos] != spcode
-          console.log results
           return results
         space = false
         data.pos += 1

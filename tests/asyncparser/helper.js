@@ -26,7 +26,6 @@
         return cb();
       }
     };
-    console.log(tests);
     _fn = function(str, expected) {
       var name, suf, wrt, _ref, _results;
       _ref = {
@@ -72,7 +71,6 @@
       if (type !== 'greeting') str = '* OK greetings\n' + str;
       _fn(str, expected);
     }
-    console.log(cases);
     return module.exports = testCase(cases);
   };
 

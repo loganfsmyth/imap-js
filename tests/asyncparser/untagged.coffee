@@ -1,12 +1,218 @@
 
 
-
+b = (s) ->
+  new Buffer s
 
 tests =
   "* OK word\n":
     'type': 'OK'
     'text-code': null
-    'text': new Buffer 'word'
+    'text': b 'word'
+  "* NO word\n":
+    'type': 'NO'
+    'text-code': null
+    'text': b 'word'
+  "* BAD word\n":
+    'type': 'BAD'
+    'text-code': null
+    'text': b 'word'
+  "* BYE word\n":
+    'type': 'BYE'
+    'text-code': null
+    'text': b 'word'
+
+  "* CAPABILITY IMAP4rev1 AUTH=PLAIN\n":
+    'type': 'CAPABILITY'
+    'value': [ b('IMAP4rev1'), b('AUTH=PLAIN') ]
+
+  "* FLAGS ()\n":
+    'type': 'FLAGS'
+    'value': []
+  "* FLAGS (\\Unseen \\Answered)\n":
+    'type': 'FLAGS'
+    'value': [ b('\\Unseen'), b('\\Answered') ]
+
+  "* LIST ()\n \"/\" INBOX\n":
+    'type': 'LIST'
+    'value':
+      'flags': []
+      'char': b '/'
+      'mailbox': b 'INBOX'
+
+  "* LIST (\\Marked \\Noselect) \"G\" INBOX\n":
+    'type': 'LIST'
+    'value':
+      'flags': [ b('\\Marked'), b('\\Noselect')]
+      'char': b 'G'
+      'mailbox': b 'INBOX'
+  "* LIST (\\Marked \\Noselect) NIL INBOX\n":
+    'type': 'LIST'
+    'value':
+      'flags': [ b('\\Marked'), b('\\Noselect') ]
+      'char': null
+      'mailbox': b 'INBOX'
+
+  "* LSUB () NIL otherbox\n":
+    'type': 'LIST'
+    'value':
+      'flags': []
+      'char': null
+      'mailbox': b 'otherbox'
+
+  "* SEARCH\n":
+    'type': 'SEARCH'
+    'value': []
+  "* SEARCH 0\n": null
+  "* SEARCH 1\n":
+    'type': 'SEARCH'
+    'value': [ 1 ]
+  "* SEARCH 1 2 3 4\n":
+    'type': 'SEARCH'
+    'value': [ 1, 2, 3, 4 ]
+
+  "* STATUS INBOX ()\n":
+    'type': 'STATUS'
+    'value':
+      'mailbox': b 'INBOX'
+      'flags': {}
+  "* STATUS INBOX (MESSAGES 5 RECENT 6 UIDNEXT 7)\n":
+    'type': 'STATUS'
+    'value':
+      'mailbox': b 'INBOX'
+      'flags':
+        'MESSAGES': 5
+        'RECENT': 6
+        'UIDNEXT': 7
+
+  "* 5 RECENT\n":
+    'type': 'RECENT'
+    'id': 5
+    'value': null
+
+  "* 5 EXISTS\n":
+    'type': 'EXISTS'
+    'id': 5
+    'value': null
+
+  "* 0 EXPUNGE\n": null
+  "* 3 EXPUNGE\n":
+    'type': 'EXPUNGE'
+    'id': 3
+    'value': null
+
+  "* 5 FETCH ()\n": null
+  "* 5 FETCH (FLAGS ())\n":
+    'type': 'FETCH'
+    'count': 5
+    'value':
+      'FLAGS': []
+
+  "* 5 FETCH (FLAGS (\\Unanswered \\Marked))\n":
+    'type': 'FETCH'
+    'count': 5
+    'value':
+      'FLAGS': ['\\Unanswered', '\\Marked']
+
+  "* 5 FETCH (ENVELOPE (\"date\" \"subject\" NIL NIL NIL NIL NIL NIL NIL NIL))\n":
+    'type': 'FETCH'
+    'count': 5
+    'value':
+      'ENVELOPE':
+        'date': b 'date'
+        'subject': b 'subject'
+        'from': null
+        'sender': null
+        'reply-to': null
+        'to': null
+        'cc': null
+        'bcc': null
+        'in-reply-to': null
+        'message-id': null
+  
+  "* 5 FETCH (ENVELOPE (\"date\" \"subject\" ((\"name\" \"adl\" \"mailbox\" \"host\")(\"name2\" \"adl2\" \"mailbox2\" \"host2\")) NIL NIL NIL NIL NIL NIL NIL))\n":
+    'type': 'FETCH'
+    'count': 5
+    'value':
+      'ENVELOPE':
+        'date': b 'date'
+        'subject': b 'subject'
+        'from': [{
+          'name': 'name'
+          'adl': 'adl'
+          'mailbox': 'mailbox'
+          'host': 'host'
+        }, {
+          'name': 'name2'
+          'adl': 'adl2'
+          'mailbox': 'mailbox2'
+          'host': 'host2'
+        }]
+        'sender': null
+        'reply-to': null
+        'to': null
+        'cc': null
+        'bcc': null
+        'in-reply-to': null
+        'message-id': null
+
+  "* 5 FETCH (INTERNALDATE \"10-Jan-2012 12:11:10 -0500\")\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'INTERNALDATE': '10-Jan-2012 12:11:10 -0500'
+
+  "* 5 FETCH (RFC822 \"rfc\")\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'RFC822': 'rfc'
+      
+  "* 5 FETCH (RFC822.HEADER \"rfc\")\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'RFC822.HEADER': 'rfc'
+  "* 5 FETCH (RFC822.TEXT \"rfc\")\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'RFC822.TEXT': 'rfc'
+  "* 5 FETCH (RFC822.SIZE 10000)\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'RFC822.SIZE': 10000
+  "* 5 FETCH (BODY[HEADER]<5> \"word\")\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'BODY[HEADER]':
+        'number': 5
+        'value': 'word'
+
+  "* 5 FETCH (BODYSTRUCTURE (\"type\" \"subtype\" \"md5\" (\"name\" (\"key\" \"val\" \"key2\" \"value2\")) \"lang\" \"loc\" (\"ext\" 14)))\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'BODYSTRUCTURE':
+        'type': 'type'
+        'subtype': 'subtype'
+        'md5': 'md5'
+        'dsp':
+          'name': 'name'
+          'value':
+            'key': 'val'
+            'key2': 'value2'
+        'lang': 'lang'
+        'loc': 'loc'
+        'ext': [ 'ext', 14 ]
+
+  "* 5 FETCH (UID 10)\n":
+    'type': 'FETCH'
+    'id': 5
+    'value':
+      'UID': 10
+
 
 
 module.exports = require('./helper').genTests('untagged', tests)

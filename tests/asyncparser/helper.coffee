@@ -20,8 +20,6 @@ exports.genTests = (type, tests) ->
       p = parser.createParser parser.TYPE_CLIENT
       cb()
 
-  console.log tests
-
   for own str, expected of tests
     if type != 'greeting'
       str = '* OK greetings\n' + str
@@ -48,9 +46,6 @@ exports.genTests = (type, tests) ->
               test.ok err instanceof parser.SyntaxError, 'Test threw an error while parsing.'
               test.done()
             wrt new Buffer str
-
-
-  console.log cases
 
   module.exports = testCase cases
 
