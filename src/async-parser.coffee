@@ -272,7 +272,7 @@ env_date = env_subject = env_message_id = env_in_reply_to = ->
 env_from = env_sender = env_reply_to = env_to = env_cc = env_bcc = ->
   starts_with 'N',
     nil(),
-    paren_wrap space_list address()
+    paren_wrap nosep_list address()
 
 date_time = ->
   cb = series [
@@ -763,7 +763,28 @@ starts_with = (c, y, n) ->
 ifset = (c, cb) ->
   starts_with c, cb, null_resp()
 
+nosep_list = (cb, end_char, allow_none) ->
+  end_char ?= ')'
+  close_code = end_char.charCodeAt 0
+  ->
+    results = []
+    handler = cb()
+    check_done = !!allow_none
+    i = 0
+    (data) ->
+      if check_done
+        return results if data.buf[data.pos] == close_code
+        check_done = false
+
+      result = handler data
+      return if typeof result == 'undefined'
+      results.push result
+      handler = cb()
+      check_done = true
+      return
+
 space_list = (cb, none) ->
+
   spcode = ' '.charCodeAt 0
   paren = ')'.charCodeAt 0
   ->
