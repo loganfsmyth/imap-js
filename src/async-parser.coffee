@@ -182,7 +182,7 @@ response_data_types = ->
     text()
   ], [1,2]
 
-  route {
+  zip ['key', 'val'], route {
 # cond-state
     "OK": resp_text
     "NO": resp_text
@@ -219,12 +219,9 @@ response_numeric_types = () ->
     types
   ], 1
 
-  (num) ->
-    handler = cb()
-    (data) ->
-      result = handler data
-      return if typeof result == 'undefined'
-      return [num, result]
+  onres cb, (result, num) ->
+    [result[0], { 'id': num, 'value': result[1]} ]
+
 
 sp = -> str ' '
 
@@ -239,7 +236,7 @@ msg_att = ->
     'RFC822.TEXT': series [ sp(), nstring() ], 1
     'RFC822.SIZE': series [ sp(), number() ], 1
     'BODYSTRUCTURE': series [ sp(), body() ], 1
-    'BODY': starts_with 'S', series([ str('STRUCTURE'), sp(), body() ]), series([ section(), starts_with('<', wrap('<', '>', number()), null_resp()), sp(), nstring() ])
+    'BODY': starts_with ' ', series([ sp(), body() ]), series([ section(), starts_with('<', wrap('<', '>', number()), null_resp()), sp(), nstring() ])
     'UID': series [ str(' '), uniqueid() ], 1
 
 envelope = ->
@@ -311,7 +308,21 @@ nstring = ->
   starts_with 'N', nil(), string()
 
 address = ->
-  -> (data) ->
+  cb = paren_wrap series [
+    addr_name()
+    sp()
+    addr_adl()
+    sp()
+    addr_mailbox()
+    sp()
+    addr_host()
+  ]
+
+  zip ['name', null, 'adl', null, 'mailbox', null, 'host'], cb
+
+addr_name = addr_adl = addr_mailbox = addr_host = ->
+  nstring()
+
 
 digits = (num) ->
   collect_until ->
@@ -367,7 +378,9 @@ mailbox_list = ->
 mbx_list_flags = ->
   space_list join(series [ str('\\'), atom() ]), true
 
-nil = -> str('NIL')
+nil = ->
+  onres str('NIL'), (result) ->
+    return null
 
 quoted_char = ->
   wrap '"', '"', quoted_char_inner()
@@ -759,7 +772,6 @@ space_list = (cb, none) ->
     space = true
     i = 0
     (data) ->
-      console.log data
       i += 1
       if not results.length
         return [] if i == 1 and none and data.buf[data.pos] == paren
@@ -871,7 +883,6 @@ route = (routes, nomatch) ->
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
 series = (parts, ids) ->
-  
   ->
     i = 0
     handler = parts[i]()
@@ -901,13 +912,13 @@ zip = (keys, cb) ->
     return ret
 
 onres = (cb, res_cb) ->
-  ->
+  (args...)->
     handler = cb()
     (data) ->
       result = handler data
       return if typeof result == 'undefined'
 
-      return res_cb result
+      return res_cb result, args...
 
 l = (data) ->
   console.log data.buf[data.pos...]
