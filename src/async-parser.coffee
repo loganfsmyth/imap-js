@@ -340,23 +340,21 @@ env_from = env_sender = env_reply_to = env_to = env_cc = env_bcc = ->
     paren_wrap nosep_list address()
 
 date_time = ->
-  cb = series [
+  cb = join series [
     str '"'
-    series [
-      starts_with ' ', series([sp(), digits(1)]), digits(2)
-      str '-'
-      oneof ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      str '-'
-      digits(4)
-    ]
+    starts_with ' ', series([sp(), digits(1)]), digits(2)
+    str '-'
+    onres oneof(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']), (result) -> new Buffer result
+    str '-'
+    digits(4)
     sp()
     time()
     sp()
     zone()
     str '"'
-  ]
+  ], [1,2,3,4,5,6,7,8,9]
 
-  zip [null, 'date', null, 'time', null, 'zone'], cb
+  onres cb, (result) -> new Date result
 
 time = ->
   join series [
@@ -367,7 +365,10 @@ time = ->
     digits 2
   ]
 zone = ->
-  series [ oneof(['-', '+']), digits(4) ]
+  join series [ 
+    onres oneof(['-', '+']), (res) -> new Buffer res
+    digits(4)
+  ]
 
 nstring = cache ->
   starts_with 'N', nil(), string()
@@ -702,17 +703,17 @@ astring = cache ->
 number = (nz) ->
   ->
     i = 0
-    str = ''
+    s = ''
     first_range = nz and [ 0x31 .. 0x39 ] or [ 0x30 .. 0x39 ]
     (data) ->
       for code in data.buf[data.pos...]
         if i == 0 and code not in first_range
           err data, 'number', 'First digit must be between #{if nz then 1 else 0} and 9'
         if code not in [ 0x30 .. 0x39 ]
-          return parseInt str, 10
+          return parseInt s, 10
         data.pos += 1
         i += 1
-        str += String.fromCharCode code
+        s += String.fromCharCode code
 
 string = cache ->
   lookup {

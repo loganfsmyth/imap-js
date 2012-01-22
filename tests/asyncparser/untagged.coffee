@@ -159,7 +159,7 @@ tests =
     'type': 'FETCH'
     'id': 5
     'value':
-      'INTERNALDATE': b '10-Jan-2012 12:11:10 -0500'
+      'INTERNALDATE': new Date '10-Jan-2012 12:11:10 -0500'
 
   "* 5 FETCH (RFC822 \"rfc\")\n":
     'type': 'FETCH'
