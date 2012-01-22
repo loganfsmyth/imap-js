@@ -56,7 +56,11 @@ exports.Parser = class Parser extends Stream
       #console.log result
       print result
       @_response()
-      @emit 'response', result
+      
+      {type, response} = result
+
+      return if type not in ['tagged', 'untagged', 'continuation']
+      @emit type, response
 
       return
 
@@ -69,12 +73,10 @@ exports.Parser = class Parser extends Stream
       pos: 0
 
     while not @destroyed and data.pos < buffer.length
-      #@parser data
       try
         @parser data
       catch e
-        throw e if e not instanceof SyntaxError
-        #console.log e.toString()
+        #throw e if e not instanceof SyntaxError
         @emit 'error', e
         @destroy()
 
@@ -178,7 +180,7 @@ continue_req = ->
   cb = zip [ null, 'text-code', 'text'], cb
   
   series [
-    -> (data) -> 'continue'
+    -> (data) -> 'continuation'
     cb
   ]
 
@@ -202,13 +204,13 @@ response_data_types = ->
   ], [1,2]
 
   zip ['key', 'val'], route {
-# cond-state
+    # cond-state
     "OK": resp_text
     "NO": resp_text
     "BAD": resp_text
-# cond-bye
+    # cond-bye
     "BYE": resp_text
-#mailbox-data
+    #mailbox-data
     "FLAGS": series [ sp(), flag_list() ], 1
     "LIST": series [ sp(), mailbox_list() ], 1
     "LSUB": series [ sp(), mailbox_list() ], 1
@@ -219,14 +221,14 @@ response_data_types = ->
       sp()
       paren_wrap status_att_list()
     ], [1, 3]
-    # number EXISTS | RECENT
-#message-data
-    # nz-number EXPUNGE | FETCH msg-att
-# capability-data
+    # capability-data
     "CAPABILITY": capability_args()
   }, response_numeric_types()
 
 response_numeric_types = () ->
+    # number EXISTS | RECENT
+#message-data
+    # nz-number EXPUNGE | FETCH msg-att
   types = route
     'EXISTS': null
     'RECENT': null
@@ -239,11 +241,12 @@ response_numeric_types = () ->
   ], 1
 
   onres cb, (result, num) ->
+    # TODO check num nz for expunge and fetch
     [result[0], { 'id': num, 'value': result[1]} ]
 
 
 sp = cache ->
-  sp()
+  str ' '
 
 text_code = cache ->
   series [ bracket_wrap(resp_text_code()), sp() ], 0
