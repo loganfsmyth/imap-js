@@ -355,16 +355,54 @@ body = ->
 section = ->
   bracket_wrap section_spec()
 
-section_msgtext = ->
-  route
+section_msgtext = (showmine) ->
+  routes =
     "HEADER": null
     "HEADER.FIELDS": series [ sp(), header_list() ], 1
     "HEADER.FIELDS.NOT": series [ sp(), header_list() ], 1
     "TEXT": null
 
+  if showmine
+    routes['MIME'] = null
+
+  route routes
+
 section_spec = ->
-  # TODO more
-  section_msgtext()
+  starts_with 'H', section_msgtext(), starts_with 'T', section_msgtext(), section_parts()
+
+
+section_parts = ->
+  num = number true
+  dot = '.'.charCodeAt 0
+  codes = ['H'.charCodeAt(0), 'T'.charCodeAt(0), 'M'.charCodeAt(0)]
+  ->
+    num_cb = num()
+    num_found = 0
+    next_cb = null
+    (data) ->
+      if next_cb
+        result = next_cb data
+        return if typeof result == 'undefined'
+        result.unshift num_found
+        return result
+      if num_found
+        return [ num_found ] if data.buf[data.pos] != dot
+        
+        data.pos += 1
+        next_cb = (data) ->
+          console.log data
+          if data.buf[data.pos] in codes
+            tmp = onres section_msgtext(true), (result) ->
+              return [result]
+            next_cb = tmp()
+          else 
+            next_cb = section_parts()()
+          return
+      else
+        result = num_cb data
+        return if typeof result == 'undefined'
+        num_found = result
+      return
 
 header_list = ->
   paren_wrap space_list header_fld_name()
