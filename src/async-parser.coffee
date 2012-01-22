@@ -162,6 +162,18 @@ response_tagged = ->
   ]
 
 continue_req = ->
+  cb = series [
+    str '+ '
+    ifset '[', text_code()
+    text()
+    crlf()
+  ]
+  cb = zip [ null, 'text-code', 'text'], cb
+  
+  series [
+    -> (data) -> 'continue'
+    cb
+  ]
 
 response_untagged = ->
   cb = series [
@@ -171,7 +183,7 @@ response_untagged = ->
   ], 1
 
   series [
-    -> (data) -> 'tagged'
+    -> (data) -> 'untagged'
     cb
   ]
 
