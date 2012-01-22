@@ -260,8 +260,10 @@ response_numeric_types = () ->
   ], 1
 
   onres cb, (result, num) ->
-    # TODO check num nz for expunge and fetch
+    if result[0].toString() in['EXPUNGE', 'FETCH'] and num[0] == 0x30 # nz_number
+      err {pos:0,buf:new Buffer 0}, 'response_numeric', 'FETCH and EXPUNGE ids must be positive'
     result.push num
+    console.log result
     result
 
 sp = cache ->
@@ -276,7 +278,7 @@ msg_att = ->
   body_struc = series [ sp(), body() ], 1
   rfc_text = series [ sp(), nstring() ], 1
 
-  body_section_data = series [
+  body_section_data = zip ['section', 'partial', null, 'value'], series [
     section()
     starts_with '<', wrap('<', '>', number()), null_resp()
     sp()
@@ -284,7 +286,7 @@ msg_att = ->
   ]
 
 
-  cb = paren_wrap space_list route
+  paren_wrap space_list zip ['type', 'value'], route
     'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), true)) ], 1
     'ENVELOPE': series [ sp(), envelope() ], 1
     'INTERNALDATE': series [ sp(), date_time() ], 1
@@ -295,14 +297,6 @@ msg_att = ->
     'BODYSTRUCTURE': body_struc
     'BODY': starts_with ' ', body_struc, body_section_data
     'UID': series [ sp(), uniqueid() ], 1
-
-  onres cb, (result) ->
-    obj = {}
-    console.log '----', result
-    for r in result
-      k = r[0].toString 'ascii'
-      obj[k] = r[1]
-    return obj
 
 envelope = ->
   cb = paren_wrap series [

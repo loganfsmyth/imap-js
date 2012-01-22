@@ -32,12 +32,12 @@ tests =
     'type': 'FLAGS'
     'value': [ b('\\Unseen'), b('\\Answered') ]
 
-#  "* LIST ()\n \"/\" INBOX\n":
-#    'type': 'LIST'
-#    'value':
-#      'flags': []
-#      'char': b '/'
-#      'mailbox': b 'INBOX'
+  "* LIST () \"/\" INBOX\n":
+    'type': 'LIST'
+    'value':
+      'flags': []
+      'char': b '/'
+      'mailbox': b 'INBOX'
 
   "* LIST (\\Marked \\Noselect) \"G\" INBOX\n":
     'type': 'LIST'
@@ -52,12 +52,12 @@ tests =
       'char': null
       'mailbox': b 'INBOX'
 
-#  "* LSUB () NIL otherbox\n":
-#    'type': 'LSUB'
-#    'value':
-#      'flags': []
-#      'char': null
-#      'mailbox': b 'otherbox'
+  "* LSUB () NIL otherbox\n":
+    'type': 'LSUB'
+    'value':
+      'flags': []
+      'char': null
+      'mailbox': b 'otherbox'
 
   "* SEARCH\n":
     'type': 'SEARCH'
@@ -94,30 +94,36 @@ tests =
     'id': 5
     'value': null
 
-  #"* 0 EXPUNGE\n": null
+  "* 0 EXPUNGE\n": null
   "* 3 EXPUNGE\n":
     'type': 'EXPUNGE'
     'id': 3
     'value': null
 
   "* 5 FETCH ()\n": null
+  "* 0 FETCH (FLAGS ())\n": null
   "* 5 FETCH (FLAGS ())\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'FLAGS': []
+    'value': [
+      'type': b 'FLAGS'
+      'value': []
+    ]
 
   "* 5 FETCH (FLAGS (\\Unanswered \\Marked))\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'FLAGS': [ b('\\Unanswered'), b('\\Marked') ]
+    'value': [
+      'type': b 'FLAGS'
+      'value': [ b('\\Unanswered'), b('\\Marked') ]
+    ]
 
   "* 5 FETCH (ENVELOPE (\"date\" \"subject\" NIL NIL NIL NIL NIL NIL NIL NIL))\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'ENVELOPE':
+    'value': [
+      'type': b 'ENVELOPE'
+      'value':
         'date': b 'date'
         'subject': b 'subject'
         'from': null
@@ -128,12 +134,13 @@ tests =
         'bcc': null
         'in-reply-to': null
         'message-id': null
-  
+    ]
   "* 5 FETCH (ENVELOPE (\"date\" \"subject\" ((\"name\" \"adl\" \"mailbox\" \"host\")(\"name2\" \"adl2\" \"mailbox2\" \"host2\")) NIL NIL NIL NIL NIL NIL NIL))\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'ENVELOPE':
+    'value': [
+      'type': b 'ENVELOPE'
+      'value':
         'date': b 'date'
         'subject': b 'subject'
         'from': [{
@@ -154,48 +161,58 @@ tests =
         'bcc': null
         'in-reply-to': null
         'message-id': null
-
+    ]
   "* 5 FETCH (INTERNALDATE \"10-Jan-2012 12:11:10 -0500\")\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'INTERNALDATE': new Date '10-Jan-2012 12:11:10 -0500'
-
+    'value': [
+      'type': b 'INTERNALDATE'
+      'value': new Date '10-Jan-2012 12:11:10 -0500'
+    ]
   "* 5 FETCH (RFC822 \"rfc\")\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'RFC822': b 'rfc'
-      
+    'value': [
+      'type': b 'RFC822'
+      'value': b 'rfc'
+    ]
   "* 5 FETCH (RFC822.HEADER \"rfc\")\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'RFC822.HEADER': b 'rfc'
+    'value': [
+      'type': b 'RFC822.HEADER'
+      'value': b 'rfc'
+    ]
   "* 5 FETCH (RFC822.TEXT \"rfc\")\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'RFC822.TEXT': b 'rfc'
+    'value': [
+      'type': b 'RFC822.TEXT'
+      'value': b 'rfc'
+    ]
   "* 5 FETCH (RFC822.SIZE 10000)\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'RFC822.SIZE': 10000
-  "* 5 FETCH (BODY[HEADER]<5> \"word\")\n":
-    'type': 'FETCH'
-    'id': 5
-    'value':
-      'BODY[HEADER]<5>':
-        'section': [ b 'HEADER' ]
-        'partial': 5
-        'value': b 'word'
-
+    'value': [
+      'type': b 'RFC822.SIZE'
+      'value': 10000
+    ]
+#  "* 5 FETCH (BODY[HEADER]<5> \"word\")\n":
+#    'type': 'FETCH'
+#    'id': 5
+#    'value': [
+#      'type': b 'BODYSECTION'
+#      'value':
+#        'section': [ b 'HEADER' ]
+#        'partial': 5
+#        'value': b 'word'
+#    ]
   "* 5 FETCH (BODYSTRUCTURE (\"type\" \"subtype\" \"md5\" (\"name\" (\"key\" \"val\" \"key2\" \"value2\")) \"lang\" \"loc\" (\"ext\" 14)))\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'BODYSTRUCTURE':
+    'value': [
+      'type': b 'BODYSTRUCTURE'
+      'value':
         'type':     b 'type'
         'subtype':  b 'subtype'
         'md5':      b 'md5'
@@ -211,13 +228,14 @@ tests =
         'lang': b 'lang'
         'loc':  b 'loc'
         'ext': [ b('ext'), 14 ]
-
+    ]
   "* 5 FETCH (UID 10)\n":
     'type': 'FETCH'
     'id': 5
-    'value':
-      'UID': 10
-
+    'value': [
+      'type': b 'UID'
+      'value': 10
+    ]
 
 
 module.exports = require('./helper').genTests('untagged', tests)
