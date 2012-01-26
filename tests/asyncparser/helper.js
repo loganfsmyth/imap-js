@@ -22,7 +22,7 @@
     };
     cases = {
       setUp: function(cb) {
-        p = parser.createParser(parser.TYPE_CLIENT);
+        p = parser.createParser(parser.CLIENT);
         return cb();
       }
     };

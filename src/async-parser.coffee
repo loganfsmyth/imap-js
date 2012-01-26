@@ -1,21 +1,22 @@
-
+#
+# imap-js - Copyright (c) 2011 Logan Falconer Smyth
+#
+# Dual licensed under MIT and GPL licenses.
+# See MIT-LICENSE.txt and GPL-LICENSE.txt
 
 Stream = require 'stream'
-util = require 'util'
 
-print = (obj) ->
-  console.log util.inspect obj, false, 20
-
-exports.TYPE_CLIENT = CLIENT = 0x01
-exports.TYPE_SERVER = SERVER = 0x02
-
-exports.createParser = (type, cb) ->
-  p = new Parser(type)
-  p.on 'response', cb if cb
-  return p
-
-
-exports.Parser = class Parser extends Stream
+module.exports = class Parser extends Stream
+  @CLIENT = CLIENT = 0x01
+  @SERVER = SERVER = 0x02
+  @createParser = (type, cbs) ->
+    p = new Parser type
+    if typeof cbs == 'function'
+      p.on 'greeting', cbs
+    else if cbs
+      for own event, cb of cbs
+        p.on event, cb
+    return p
   constructor: (@type) ->
     @writable = true
     @destroyed = false
@@ -109,7 +110,7 @@ exports.Parser = class Parser extends Stream
     return
 
 
-exports.SyntaxError = class SyntaxError extends Error
+module.exports.SyntaxError = class SyntaxError extends Error
   constructor: (data, rule = '', extra = '') ->
     context = 10
     @name = "IMAPSyntaxError"
@@ -124,6 +125,9 @@ exports.SyntaxError = class SyntaxError extends Error
       rule + (extra and "\n" + extra) + "\n" +
       "==" + buf.toString('utf8', start, end) + "==\n" +
       "  " + (" " for i in [0...pos]).join('') + "^\n"
+
+
+
 
 cache = (func) ->
   cb = null

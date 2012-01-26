@@ -1,3 +1,8 @@
+#
+# imap-js - Copyright (c) 2011 Logan Falconer Smyth
+#
+# Dual licensed under MIT and GPL licenses.
+# See MIT-LICENSE.txt and GPL-LICENSE.txt
 
 {testCase} = require 'nodeunit'
 parser = require '../../lib/async-parser'
@@ -17,7 +22,7 @@ exports.genTests = (type, tests) ->
 
   cases =
     setUp: (cb) ->
-      p = parser.createParser parser.TYPE_CLIENT
+      p = parser.createParser parser.CLIENT
       cb()
 
   for own str, expected of tests
