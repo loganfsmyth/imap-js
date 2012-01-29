@@ -16,14 +16,15 @@ module.exports = class ConnectionStream extends Stream
   constructor: (port, host, @secure, cb) ->
     if @secure
       port ?= 993
-      @_stream = tls.connect options.port, options.host, options.tls, =>
+      @_stream = tls.connect port, host, =>
         #stream.authorizationError if cb and not stream.authorized and not tlsoptions.allowUnauthorized
         @emit 'connect'
       @socket = @_stream.socket
     else
       port ?= 143
-      @socket = @_stream = net.createConnection options.port, options.host, =>
+      @socket = @_stream = net.createConnection port, host, =>
         @emit 'connect'
+
 
     @_bindListeners()
 
@@ -34,12 +35,14 @@ module.exports = class ConnectionStream extends Stream
     if typeof options == 'function'
       cb = options
       options = null
+    options ?= {}
 
     sslcontext = crypto.createCredentials options
     pair = tls.createSecurePair sslcontext, options.server, options.requestCert, options.rejectUnauthorized
 
     @_stream.removeListener 'data', @_boundListeners['data']
     @_stream = pipe pair, @socket
+    @_stream.on 'data', @_boundListeners['data']
 
     pair.on 'secure', =>
       verifyError = pair.ssl.verifyError()
@@ -52,10 +55,9 @@ module.exports = class ConnectionStream extends Stream
       else
         @_stream.authorized = true
 
-      cleartext.emit 'secureConnect'
+      @_stream.emit 'secureConnect'
 
     @_stream.on 'secureConnect', =>
-      @_stream.on 'data', @_boundListeners['data']
       if not @_stream.authorized and not options.allowUnauthorized
         cb @_stream.authorizationError
       else

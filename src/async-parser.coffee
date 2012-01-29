@@ -267,7 +267,6 @@ response_numeric_types = () ->
     if result[0].toString() in['EXPUNGE', 'FETCH'] and num[0] == 0x30 # nz_number
       err {pos:0,buf:new Buffer 0}, 'response_numeric', 'FETCH and EXPUNGE ids must be positive'
     result.push num
-    console.log result
     result
 
 sp = cache ->
@@ -1001,8 +1000,11 @@ space_list = (cb, none) ->
 
 opt = (c) ->
   starts_with c,
-    (-> (data) -> new Buffer c),
-    (-> (data) -> new Buffer 0)
+    -> (data) ->
+      data.pos += 1
+      new Buffer c
+    -> (data) ->
+      new Buffer 0
 
 wrap = (open, close, cb) ->
   series [

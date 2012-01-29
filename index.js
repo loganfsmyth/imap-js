@@ -1,6 +1,6 @@
 
 
 module.exports = {
-  "ImapClient": require('./lib/imap-client').ImapClient,
+  createClient: require('./lib/client').createClient
 };
 
