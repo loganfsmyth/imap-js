@@ -43,8 +43,10 @@ module.exports = class Client extends EventEmitter
     options.host ?= 'localhost'
     options.security ?= 'none'
     @_security = options.security
-    @_con = constream.createConnection options.port, options.host, options.security == 'ssl'
+    @_con = options.stream || constream.createConnection options.port, options.host, options.security == 'ssl'
+    
     @_parser = parser.createParser parser.CLIENT
+    @_con.on 'data', (c) -> console.log c.toString 'utf8'
 
     @_con.on 'connect', =>
       @_con.pipe @_parser
@@ -91,10 +93,12 @@ module.exports = class Client extends EventEmitter
     s.resume() if s
 
   _handleCommand: ({command, response}, args, cb) ->
-      command = command.apply @, args if typeof command == 'function'
       t = tag()
+      command = command.apply @, args if typeof command == 'function'
+      command = t + ' ' + command + '\r\n'
+
       console.log command
-      @_con.write t + ' ' + command + '\r\n'
+      @_con.write command
       @_respCallbacks[t] = if not response then cb else (err, resp) => response.call @, err, resp, cb
 
       return
@@ -107,6 +111,8 @@ module.exports = class Client extends EventEmitter
 
   logout: cmd
     command: 'LOGOUT'
+    response: (err, resp, cb) ->
+      @_con.close() if not err
 
   starttls: cmd
     command: 'STARTTLS'
