@@ -53,15 +53,24 @@ module.exports = class Parser extends Stream
       return if not result
       @partial = data.pos != data.buf.length
 
-      #console.log 'Response:'
-      #console.log result
-      #print result
       @_response()
-      
       {type, response} = result
 
       return if type not in ['tagged', 'untagged', 'continuation']
       @emit type, response
+
+      return
+
+  _command: ->
+    cmd = command()
+    @parser = (data) =>
+      @partial = true
+      result = cmd data
+      return if not result
+      @partial = data.pos != data.buf.length
+
+      @_command()
+      @emit 'command', result
 
       return
 
@@ -124,7 +133,7 @@ module.exports.SyntaxError = class SyntaxError extends Error
     @message =
       rule + (extra and "\n" + extra) + "\n" +
       "==" + buf.toString('utf8', start, end) + "==\n" +
-      "  " + (" " for i in [0...pos]).join('') + "^\n"
+      "  " + (" " for i in [0...error]).join('') + "^\n"
 
 
 
@@ -290,7 +299,7 @@ msg_att = ->
 
 
   paren_wrap space_list zip ['type', 'value'], route
-    'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), true)) ], 1
+    'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), ')')) ], 1
     'ENVELOPE': series [ sp(), envelope() ], 1
     'INTERNALDATE': series [ sp(), date_time() ], 1
     'RFC822': rfc_text
@@ -546,7 +555,7 @@ uniqueid = ->
   number(true)
 
 flag_list = ->
-  paren_wrap space_list flag(), true
+  paren_wrap space_list flag(), ')'
 
 mailbox_list = ->
   zip [ 'flags', null, 'char', null, 'mailbox' ], series [
@@ -558,7 +567,7 @@ mailbox_list = ->
   ]
 
 mbx_list_flags = ->
-  space_list join(series [ str('\\'), atom() ]), true
+  space_list join(series [ str('\\'), atom() ]), ')'
 
 nil = cache ->
   onres str('NIL'), (result) ->
@@ -611,7 +620,7 @@ status_att_list = ->
     number()
   ], [0, 2]
 
-  space_list status_att_pair, true
+  space_list status_att_pair, ')'
 
 
 tag = ->
@@ -624,7 +633,7 @@ resp_text_code = ->
   space_num           = series [ sp(), number true ], 1
   badcharset_args     = series [ sp(), paren_wrap space_list astring() ], 1
 
-  permanentflags_args = series [ sp(), paren_wrap space_list(flag(true), true) ], 1
+  permanentflags_args = series [ sp(), paren_wrap space_list(flag(true), ')') ], 1
 
   atom_args = lookup
     ' ': series [ sp(), textchar_str() ], 1
@@ -826,6 +835,13 @@ astring_str = ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
 
+list_char_str = ->
+  chars = list_chars()
+  collect_until -> (data) ->
+    for code, i in data.buf[data.pos...]
+      if code not in chars
+        return i
+
 # Match a given string
 str = (s) ->
   buffer = new Buffer s
@@ -834,7 +850,7 @@ str = (s) ->
     (data) ->
       {pos, buf} = data
       while pos < buf.length and i < buffer.length
-        err data, 'str', 'failed to match ' + s if buf[pos] != buffer[i]
+        err data, 'str', 'failed to match "' + s + '"' if buf[pos] != buffer[i]
         i += 1
         pos += 1
       data.pos = pos
@@ -913,8 +929,14 @@ text_chars = do ->
   b = new Buffer (c for c in [0x01..0x7F] when c != 10 and c != 13) # all except \r and \n
   -> b
 
-
-
+list_chars = do ->
+  col = collector()
+  col atom_chars()
+  col list_wildcards()
+  col resp_specials()
+  b = col()
+  col = null
+  -> b
 
 ####################### Parser Helpers  ################
 
@@ -965,28 +987,30 @@ nosep_list = (cb, end_char, allow_none) ->
       check_done = true
       return
 
-space_list = (cb, none) ->
 
-  spcode = ' '.charCodeAt 0
-  paren = ')'.charCodeAt 0
+
+sep_list = (sep_char, none_char, cb) ->
+
+  sepcode = sep_char.charCodeAt 0
+  none_code = none_char and none_char.charCodeAt 0
   ->
     results = []
     handler = cb()
-    space = true
+    sep = true
     i = 0
     (data) ->
       i += 1
       if not results.length
-        return [] if i == 1 and none and data.buf[data.pos] == paren
+        return [] if i == 1 and none_code and data.buf[data.pos] == none_code
         result = handler data
         return if typeof result == 'undefined'
         results.push result
         return
 
-      if space
-        if data.buf[data.pos] != spcode
+      if sep
+        if data.buf[data.pos] != sepcode
           return results
-        space = false
+        sep = false
         data.pos += 1
         handler = cb()
         return
@@ -994,8 +1018,14 @@ space_list = (cb, none) ->
       result = handler data
       return if typeof result == 'undefined'
       results.push result
-      space = true
+      sep = true
       return
+
+space_list = (cb, none_char) ->
+  sep_list ' ', none_char, cb
+
+comma_list = (cb) ->
+  sep_list ',', false, cb
 
 
 opt = (c) ->
@@ -1132,4 +1162,218 @@ l = (data) ->
 
 greeting = greeting()
 response = response()
+
+
+
+
+
+
+
+
+
+##################### Server Section ######################
+
+command = ->
+  cmd = route
+    "CAPABILITY": null
+    "LOGOUT": null
+    "NOOP": null
+    "APPEND": append_args()
+    "CREATE": series([ sp(), mailbox() ], 1)
+    "DELETE": series([ sp(), mailbox() ], 1)
+    "EXAMINE": series([ sp(), mailbox() ], 1)
+    "LIST": series([ sp(), mailbox(), sp(), list_mailbox() ], [1,3])
+    "LSUB": series([ sp(), mailbox(), sp(), list_mailbox() ], [1,3])
+    "RENAME": series([ sp(), mailbox(), sp(), mailbox() ], [1,3])
+    "SELECT": series([ sp(), mailbox() ], 1)
+    "STATUS": series([ sp(), mailbox(), sp(), paren_wrap(status_att_list()) ], [1,3])
+    "SUBSCRIBE": series([ sp(), mailbox() ], 1)
+    "UNSUBSCRIBE": series([ sp(), mailbox() ], 1)
+    "LOGIN": series([ sp(), userid(), sp(), password() ], [1,3])
+    "AUTHENTICATE": series([ sp(), auth_type() ], 1)
+    "STARTTLS": null
+    "CHECK": null
+    "CLOSE": null
+    "EXPUNGE": null
+    "COPY": series([ sp(), seq_set(), sp(), mailbox() ], [1,3])
+    "FETCH": series([ sp(), seq_set(), sp(), fetch_attributes() ], [1,3])
+    "STORE": series([ sp(), seq_set(), sp(), store_att_flags() ], [1,3])
+    "UID": series([ sp(), uniqueid() ], 1)
+    "SEARCH": series([ sp(), search_args() ], 1)
+    "X": x_command()
+
+  cb = series [
+    tag()
+    sp()
+    cmd
+    crlf()
+  ]
+
+  onres cb, (result) ->
+
+    tag: result[0]
+    command: result[2][0]
+    args: result[2][1]
+
+
+search_args = ->
+  c = 'C'.charCodeAt 0
+  h = 'H'.charCodeAt 0
+  
+  nocharset = space_list search_key()
+  hascharset = series [
+    str 'CHARSET'
+    sp()
+    astring()
+    sp()
+    nocharset
+  ]
+
+  ->
+    i = 0
+    handler = null
+    (data) ->
+      if not handler
+        while code in data.buf[data.pos...]
+          if i == 0 and code != c
+            handler = nocharset()
+            break
+          else if i == 1 and code != h
+            handler = nocharset()
+            handler
+              pos: 0
+              buf: new Buffer 'C'
+            break
+          else
+            break
+          i += 1
+          data.pos += 1
+        if i == 2
+          handler = hascharset()
+          handler
+            pos: 0
+            buf: new Buffer 'CH'
+
+      if handler
+        handler data
+
+
+
+search_key = cache ->
+  route
+    "ALL": null
+    "ANSWERED": null
+    "BCC": series [ sp(), astring() ], 1
+    "BEFORE": series [ sp(), date() ], 1
+    "BODY": series [ sp(), astring() ], 1
+    "CC": series [ sp(), astring() ], 1
+    "DELETED": null
+    "FLAGGED": null
+    "FROM": series [ sp(), astring() ], 1
+    "KEYWORD": series [ sp(), flag_keyword() ], 1
+    "NEW": null
+    "OLD": null
+    "ON": series [ sp(), date() ], 1
+    "RECENT": null
+    "SEEN": null
+    "SINCE": series [ sp(), date() ], 1
+    "SUBJECT": series [ sp(), astring() ], 1
+    "TEXT": series [ sp(), astring() ], 1
+    "TO": series [ sp(), astring() ], 1
+    "UNANSWERED": null
+    "UNDELETED": null
+    "UNFLAGGED": null
+    "UNKEYWORD": series [ sp(), flag_keyword() ], 1
+    "UNSEEN": null
+    "DRAFT": null
+    "HEADER": series [ sp(), header_fld_name(), sp(), astring() ], [1,3]
+    "LARGER": series [ sp(), number() ], 1
+    "NOT": series [ sp(), search_key() ], 1
+    "OR": series [ sp(), search_key(), sp(), search_key() ], [1,3]
+    "SENTBEFORE": series [ sp(), date() ], 1
+    "SENTON": series [ sp(), date() ], 1
+    "SENTSINCE": series [ sp(), date() ], 1
+    "SMALLER": series [ sp(), number() ], 1
+    "UID": series [ sp(), seq_set() ], 1
+    "UNDRAFT": null
+  , (key)
+   # seqset || (
+
+
+
+userid = ->
+  astring()
+
+password = ->
+  astring()
+
+auth_type = ->
+  atom()
+
+list_mailbox = ->
+  lookup
+    '"': string()
+    "{": string()
+    '': list_char_str()
+
+store_att_flags = ->
+  series [
+    oneof ['+', '-']
+    str 'FLAGS'
+    ifset '.', str '.SILENT'
+    sp()
+    starts_with '(', flag_list(), space_list(flag())
+  ]
+
+seq_set = ->
+  comma_list seq_item()
+
+seq_item = ->
+  num = seq_num()
+  cb = series [
+    num()
+    ifset ':', series [ str(':'), num() ], 1
+  ]
+
+  onres cb, (result) ->
+    if not result[1]
+      result.pop()
+    result
+
+seq_num = ->
+  num = number true
+  star = '*'.charCodeAt 0
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        if data.buf[data.pos] == star
+          return data.buf[data.pos...data.pos+1]
+        else
+          handler = num()
+      handler data
+
+fetch_attributes = ->
+
+  ->
+    (data) ->
+
+append_args = ->
+
+  ->
+    (data) ->
+
+x_command = ->
+
+  ->
+    (data) ->
+
+
+
+
+
+
+command = command()
+
+
 
