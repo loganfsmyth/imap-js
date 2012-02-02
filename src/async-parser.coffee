@@ -1287,7 +1287,7 @@ flag_keyword = ->
   atom()
 
 search_key = cache ->
-  route
+  keys = route
     "ALL": null
     "ANSWERED": null
     "BCC": series [ sp(), astring() ], 1
@@ -1323,11 +1323,21 @@ search_key = cache ->
     "SMALLER": series [ sp(), number() ], 1
     "UID": series [ sp(), seq_set() ], 1
     "UNDRAFT": null
-  , (key) ->
 
-   # seqset || (
-
-
+  list = paren_wrap space_list search_key()
+  num = seq_set()
+  paren = '('.charCodeAt 0
+  ->
+    handler = null
+    (data) ->
+      if not handler
+        if data.buf[data.pos] in [0x30..0x39]
+          handler = num()
+        else if data.buf[data.pos] == paren
+          handler = list()
+        else
+          handler = keys()
+      handler data
 
 userid = ->
   astring()
@@ -1415,9 +1425,14 @@ subsection = ->
   ]
 
 append_args = ->
-
-  ->
-    (data) ->
+  series [
+    sp()
+    mailbox()
+    sp()
+    ifset '(', series [ flag_list(), sp() ], 1
+    ifset '"', series [ date_time(), sp() ], 1
+    literal_size()
+  ], [1, 3, 4, 5]
 
 x_command = ->
 
