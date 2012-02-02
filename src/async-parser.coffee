@@ -1234,8 +1234,8 @@ command = ->
 
   onres cb, (result) ->
 
-    tag: result[0]
-    command: result[2][0]
+    tag: result[0].toString()
+    command: result[2][0].toString()
     args: result[2][1]
 
 
@@ -1250,7 +1250,7 @@ search_args = ->
     astring()
     sp()
     nocharset
-  ]
+  ], [0,2,4]
 
   ->
     i = 0
@@ -1267,15 +1267,14 @@ search_args = ->
               pos: 0
               buf: new Buffer 'C'
             break
-          else
+          else if i == 2
+            handler = hascharset()
+            handler
+              pos: 0
+              buf: new Buffer 'CH'
             break
           i += 1
           data.pos += 1
-        if i == 2
-          handler = hascharset()
-          handler
-            pos: 0
-            buf: new Buffer 'CH'
 
       if handler
         handler data
