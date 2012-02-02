@@ -345,6 +345,15 @@ env_from = env_sender = env_reply_to = env_to = env_cc = env_bcc = ->
     nil(),
     paren_wrap nosep_list address()
 
+date_text = ->
+  join series [
+    starts_with ' ', series([sp(), digits(1)]), digits(2)
+    str '-'
+    onres oneof(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']), (result) -> new Buffer result
+    str '-'
+    digits(4)
+  ]
+
 date_time = ->
   cb = join series [
     str '"'
@@ -607,15 +616,18 @@ quoted_char_inner = ->
 mailbox = cache ->
   astring()
 
+status_att = ->
+  oneof [
+    'MESSAGES'
+    'RECENT'
+    'UIDNEXT'
+    'UIDVALIDITY'
+    'UNSEEN'
+  ]
+
 status_att_list = ->
   status_att_pair = series [
-    oneof [
-      'MESSAGES'
-      'RECENT'
-      'UIDNEXT'
-      'UIDVALIDITY'
-      'UNSEEN'
-    ]
+    status_att()
     sp()
     number()
   ], [0, 2]
@@ -1174,6 +1186,11 @@ response = response()
 ##################### Server Section ######################
 
 command = ->
+  copy = series([ sp(), seq_set(), sp(), mailbox() ], [1,3])
+  fetch = series([ sp(), seq_set(), sp(), fetch_attributes() ], [1,3])
+  search = series([ sp(), search_args() ], 1)
+  store =  series([ sp(), seq_set(), sp(), store_att_flags() ], [1,3])
+
   cmd = route
     "CAPABILITY": null
     "LOGOUT": null
@@ -1186,7 +1203,7 @@ command = ->
     "LSUB": series([ sp(), mailbox(), sp(), list_mailbox() ], [1,3])
     "RENAME": series([ sp(), mailbox(), sp(), mailbox() ], [1,3])
     "SELECT": series([ sp(), mailbox() ], 1)
-    "STATUS": series([ sp(), mailbox(), sp(), paren_wrap(status_att_list()) ], [1,3])
+    "STATUS": series([ sp(), mailbox(), sp(), paren_wrap(space_list(status_att())) ], [1,3])
     "SUBSCRIBE": series([ sp(), mailbox() ], 1)
     "UNSUBSCRIBE": series([ sp(), mailbox() ], 1)
     "LOGIN": series([ sp(), userid(), sp(), password() ], [1,3])
@@ -1195,11 +1212,17 @@ command = ->
     "CHECK": null
     "CLOSE": null
     "EXPUNGE": null
-    "COPY": series([ sp(), seq_set(), sp(), mailbox() ], [1,3])
-    "FETCH": series([ sp(), seq_set(), sp(), fetch_attributes() ], [1,3])
-    "STORE": series([ sp(), seq_set(), sp(), store_att_flags() ], [1,3])
-    "UID": series([ sp(), uniqueid() ], 1)
-    "SEARCH": series([ sp(), search_args() ], 1)
+    "COPY": copy
+    "FETCH": fetch
+    "STORE": store
+    "SEARCH": search
+    "UID": series([ sp(), route({
+      "COPY": copy
+      "FETCH": fetch
+      "SEARCH": search
+      "STORE": store
+    })], 1)
+
     "X": x_command()
 
   cb = series [
@@ -1234,7 +1257,7 @@ search_args = ->
     handler = null
     (data) ->
       if not handler
-        while code in data.buf[data.pos...]
+        for code in data.buf[data.pos...]
           if i == 0 and code != c
             handler = nocharset()
             break
@@ -1257,7 +1280,11 @@ search_args = ->
       if handler
         handler data
 
+date = ->
+  starts_with '"', wrap('"', '"', date_text()), date_text()
 
+flag_keyword = ->
+  atom()
 
 search_key = cache ->
   route
@@ -1286,17 +1313,18 @@ search_key = cache ->
     "UNKEYWORD": series [ sp(), flag_keyword() ], 1
     "UNSEEN": null
     "DRAFT": null
-    "HEADER": series [ sp(), header_fld_name(), sp(), astring() ], [1,3]
+    "HEADER": series([ sp(), header_fld_name(), sp(), astring() ], [1,3])
     "LARGER": series [ sp(), number() ], 1
     "NOT": series [ sp(), search_key() ], 1
-    "OR": series [ sp(), search_key(), sp(), search_key() ], [1,3]
+    "OR": series([ sp(), search_key(), sp(), search_key() ], [1,3])
     "SENTBEFORE": series [ sp(), date() ], 1
     "SENTON": series [ sp(), date() ], 1
     "SENTSINCE": series [ sp(), date() ], 1
     "SMALLER": series [ sp(), number() ], 1
     "UID": series [ sp(), seq_set() ], 1
     "UNDRAFT": null
-  , (key)
+  , (key) ->
+
    # seqset || (
 
 
@@ -1317,9 +1345,8 @@ list_mailbox = ->
     '': list_char_str()
 
 store_att_flags = ->
-  series [
-    oneof ['+', '-']
-    str 'FLAGS'
+  zip ['op', 'silent', null, 'flags'], series [
+    oneof ['+FLAGS', '-FLAGS', 'FLAGS']
     ifset '.', str '.SILENT'
     sp()
     starts_with '(', flag_list(), space_list(flag())
@@ -1331,8 +1358,8 @@ seq_set = ->
 seq_item = ->
   num = seq_num()
   cb = series [
-    num()
-    ifset ':', series [ str(':'), num() ], 1
+    num
+    ifset ':', series [ str(':'), num ], 1
   ]
 
   onres cb, (result) ->
@@ -1353,10 +1380,39 @@ seq_num = ->
           handler = num()
       handler data
 
+# TODO This doesn't QUITE conform because ALL FULL and FAST can be repeated
 fetch_attributes = ->
+  starts_with '(', paren_wrap(space_list(fetch_att())), fetch_att()
+fetch_att = ->
+  body_section = series [
+    section()
+    ifset '<', subsection()
+  ]
 
-  ->
-    (data) ->
+  route
+    "ALL": null
+    "FULL": null
+    "FAST": null
+    "ENVELOPE": null
+    "FLAGS": null
+    "INTERNALDATE": null
+    "RFC822": null
+    "RFC822.HEADER": null
+    "RFC822.TEXT": null
+    "RFC822.SIZE": null
+    "BODY": ifset '[', body_section
+    "BODYSTRUCTURE": null
+    "BODY.PEEK": body_section
+    "UID": null
+
+subsection = ->
+  series [
+    str '<'
+    number()
+    str '.'
+    number(true)
+    str '>'
+  ]
 
 append_args = ->
 
