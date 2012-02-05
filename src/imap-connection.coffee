@@ -9,11 +9,14 @@ net     = require 'net'
 crypto  = require 'crypto'
 Stream  = require 'stream'
 
-module.exports = class ConnectionStream extends Stream
-  @createConnection = (port, host, secure, cb) ->
-    return new ConnectionStream port, host, secure, cb
+exports.createConnection = (port, host, secure, cb) ->
+  stream = new ConnectionStream port, host, secure
+  stream.on 'connect', cb if cb
+  return stream
 
-  constructor: (port, host, @secure, cb) ->
+
+exports.ConnectionStream = class ConnectionStream extends Stream
+  constructor: (port, host, @secure) ->
     if @secure
       port ?= 993
       @_stream = tls.connect port, host, =>
@@ -94,6 +97,64 @@ ConnectionStream.prototype.__defineGetter__ 'writable', ->
 ConnectionStream.prototype.__defineGetter__ 'readable', ->
   return @_stream.readable
 
+
+starttls = (self, socket, options, sharedCreds, cb) ->
+  creds = crypto.createCredentials null, sharedCreds.context
+
+  pair = new SecurePair creds, true, self.requestCert, self.rejectUnauthorized,
+
+  cleartext = pipe pair, socket
+  cleartext._controlReleased = false
+
+  pair.on 'secure', ->
+    pair.cleartext.authorized = false
+
+    if not options.requestCert
+      cleartext._controlReleased = true
+      self.emit 'secureConnection', pair.cleartext, pair.encrypted
+    else
+      verifyError = pair.ssl.verifyError()
+      if verifyError
+        pair.cleartext.authorizationError = verifyError
+
+        if self.rejectUnauthorized
+          socket.destroy()
+          pair.destroy()
+        else
+          cleartext._controlReleased = true
+          self.emit 'secureConnection', pair.cleartext, pair.encrypted
+      else
+        pair.cleartext.authorized = true
+        cleartext._controlReleased = true
+        self.emit 'secureConnection', pair.cleartext, pair.encrypted
+
+  pair.on 'error', (err) ->
+    self.emit 'clientError', err
+
+  self.on 'secureConnection', cb
+
+module.exports.createServer = (type, options, cb) ->
+
+  if type == 'tls'
+    return tls.createServer options, cb
+  else
+    sharedCreds = crypto.createCredentials
+      key: options.key,
+      passphrase: options.passphrase,
+      cert: options.cert,
+      ca: options.ca,
+      ciphers: options.ciphers || 'RC4-SHA:AES128-SHA:AES256-SHA',
+      secureProtocol: options.secureProtocol,
+      secureOptions: options.secureOptions,
+      crl: options.crl,
+      sessionIdContext: options.sessionIdContext || (options.requestCert && crypto.createHash('md5').update(process.argv.join(' ')).digest('hex'))
+    server = net.createServer options, (con) ->
+      con.starttls = (cb) ->
+        starttls server, @, options, sharedCreds, cb
+      cb con
+
+
+
 #### pipe
 # Standard pipe function very similar to the one used in node.js's tls.js
 # file for making a cleartext stream from an encrypted stream.
@@ -131,3 +192,4 @@ pipe = (pair, socket) ->
   socket.on 'timeout', ontimeout
 
   return cleartext
+

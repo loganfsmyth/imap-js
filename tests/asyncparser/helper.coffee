@@ -22,11 +22,11 @@ exports.genTests = (type, tests) ->
 
   cases =
     setUp: (cb) ->
-      p = parser.createParser parser.CLIENT
+      p = parser.createParser if type != 'command' then parser.CLIENT else parser.SERVER
       cb()
 
   for own str, expected of tests
-    if type != 'greeting'
+    if type != 'greeting' and type != 'command'
       str = '* OK greetings\n' + str
 
     do (str, expected) ->

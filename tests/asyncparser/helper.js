@@ -22,7 +22,7 @@
     };
     cases = {
       setUp: function(cb) {
-        p = parser.createParser(parser.CLIENT);
+        p = parser.createParser(type !== 'command' ? parser.CLIENT : parser.SERVER);
         return cb();
       }
     };
@@ -68,7 +68,9 @@
     for (str in tests) {
       if (!__hasProp.call(tests, str)) continue;
       expected = tests[str];
-      if (type !== 'greeting') str = '* OK greetings\n' + str;
+      if (type !== 'greeting' && type !== 'command') {
+        str = '* OK greetings\n' + str;
+      }
       _fn(str, expected);
     }
     return module.exports = testCase(cases);
