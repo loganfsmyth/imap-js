@@ -18,7 +18,7 @@ module.exports = class Client extends EventEmitter
     (args..., cb) -> @_handleCommand options, args, cb
 
   q = (str) ->
-    '"' + str.replace(/(["\\])/,"\\$1") + '"'
+    '"' + str.replace(/(["\\])/g,"\\$1") + '"'
 
   @CommandError = class CommandError extends Error
     constructor: (resp) ->

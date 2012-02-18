@@ -482,28 +482,92 @@ body_type_mpart = ->
 
 
 body_type_1part = ->
+  series [
+    body_type_1part_main()
+    ifset ' ', series [ sp(), body_ext_1part() ], 1
+  ]
+
+body_fld_lines = -> number()
+body_fld_id = -> nstring()
+body_fld_desc = -> nstring()
+body_fld_enc = -> string()
+body_fld_octets = -> number()
+
+body_type_1part_main = ->
   cb = series [
     string()
     sp()
     media_subtype()
-    ifset ' ', series [ sp(), body_ext_1part() ], 1
+  ], [0, 2]
+
+  body_fields = zip ['param', null, 'id', null, 'desc', null, 'enc', null, 'octets'], series [
+    body_fld_param()
+    sp()
+    body_fld_id()
+    sp()
+    body_fld_desc()
+    sp()
+    body_fld_enc()
+    sp()
+    body_fld_octets()
   ]
 
-  onres cb, (result) ->
-    'type': result[0]
-    'subtype': result[2]
-    'md5': result[3] and result[3][0]
-    'dsp': result[3] and result[3][1]
-    'lang': result[3] and result[3][2]
-    'loc': result[3] and result[3][3]
-    'ext': result[3] and result[3][4]
+
+  body_type_msg = zip [null, 'fields', null, 'env', null, 'body', null, 'lines'], series [
+    sp()
+    body_fields
+    sp()
+    envelope()
+    sp()
+    body()
+    sp()
+    body_fld_lines()
+  ]
+
+  body_type_text = zip [null, 'fields', null, 'lines'], series [
+    sp()
+    body_fields
+    sp()
+    body_fld_lines()
+  ]
+
+  body_type_basic = zip [null, 'fields'], series [
+    sp()
+    body_fields
+  ]
+
+  ->
+    handler = cb()
+    media = null
+    (data) ->
+      if not media
+        result = handler data
+        return if typeof result == 'undefined'
+        media = result
+        console.log media[0].toString(), media[1].toString()
+        if media[0].toString('ascii') == 'MESSAGE' && media[1].toString('ascii') == 'RFC822'
+          # media-message
+          handler = body_type_msg()
+        else if media[0].toString('ascii').toUpperCase() == 'TEXT'
+          # media-text
+          handler = body_type_text()
+        else
+          # media-basic
+          handler = body_type_basic()
+      result = handler data
+      return if typeof result == 'undefined'
+      
+      result.type = media[0]
+      result.subtype = media[1]
+
+      return result
 
 
 body = cache ->
   paren_wrap starts_with '(', body_type_mpart(), body_type_1part()
 
 section = ->
-  bracket_wrap section_spec()
+  bracket_wrap starts_with ']', null_resp(), section_spec()
 
 section_msgtext = (showmine) ->
   routes =
@@ -755,7 +819,7 @@ collect_until = (cb, none) ->
         col data.buf[data.pos...]
         data.pos = data.buf.length
       else
-        col data.buf[data.pos...data.pos+i]
+        col data.buf[data.pos...data.pos+i] if i != 0
         data.pos += i
         all = col()
         return all if all or none
@@ -814,16 +878,17 @@ literal = (emit) ->
         result = size_cb data
         return if typeof result == 'undefined'
         length = result
-        size = null
+        size_cb = null
         dat = literal_dat length
 
-      if nl
-        result = nl data
+      if nl_cb
+        result = nl_cb data
         return if typeof result == 'undefined'
-        nl = null
+        nl_cb = null
 
       result = dat data
       return result if typeof result != 'undefined'
+
 
 literal_size = ->
   curly_wrap number()
@@ -832,10 +897,9 @@ literal_data = (emit) ->
   collect_until (size) ->
     remaining = size
     (data) ->
-      len = Math.min data.buf.length - data.pos, size
+      len = Math.min data.buf.length - data.pos, remaining
       remaining -= len
       buf = data.buf[data.pos ... data.pos+len]
-      data.pos += len
       for code in buf when code not in [0x01..0xFF]
         err data, 'literal_data', 'Literals can only bytes between 1 and 255'
       return len if remaining == 0
