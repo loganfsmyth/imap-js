@@ -89,10 +89,13 @@ module.exports = class Client extends EventEmitter
   _onUntagged: (resp) ->
     console.log resp
   _onContinuation: (resp) ->
-    s = @_contQueue.shift()
-    s.resume() if s
+    cb = @_contQueue.shift()
+    if cb
+      cb()
+    else
+      console.log 'wtf??'
 
-  _handleCommand: ({command, response}, args, cb) ->
+  _handleCommand: ({command, response, continue: cont}, args, cb) ->
       t = tag()
       command = command.apply @, args if typeof command == 'function'
       command = t + ' ' + command + '\r\n'
@@ -100,6 +103,16 @@ module.exports = class Client extends EventEmitter
       console.log command
       @_con.write command
       @_respCallbacks[t] = if not response then cb else (err, resp) => response.call @, err, resp, cb
+      if cont
+        @_contQueue.push =>
+          cont args..., (err, buffer) =>
+            if buffer and not err
+              console.log 'writing ' + buffer.length + ' bytes'
+              @_con.write buffer
+            else
+              @_con.write "\r\n", 'ascii'
+              # TODO: What now?
+
 
       return
 
@@ -193,15 +206,36 @@ module.exports = class Client extends EventEmitter
 
   append: cmd
     command: (mailbox, flags, datetime, bytes) ->
-      if flags instanceof Date
+      if !Array.isArray flags
+        bytes = datetime
         datetime = flags
         flags = null
+      if datetime not instanceof Date
+        bytes = datetime
+        datetime = null
 
       com = "APPEND #{q mailbox} "
       com += "(#{flags.join ' '}) " if flags
       com += '"' + @_dateToDatetime(datetime) + '" ' if datetime
-      com += '{' + bytes + '}\r\n'
+      com += '{'
+      if typeof bytes == 'string'
+        com += Buffer.byteLength bytes
+      else if Buffer.isBuffer bytes
+        com += bytes.length
+      com += '}'
       return com
+    continue: (mailbox, flags, datetime, bytes, cb) ->
+      if !Array.isArray flags
+        cb = bytes
+        bytes = datetime
+        datetime = flags
+        flags = null
+      if datetime not instanceof Date
+        cb = bytes
+        bytes = datetime
+        datetime = null
+      cb null, bytes
+      cb()
 
   check: cmd
     command: "CHECK"
@@ -213,22 +247,14 @@ module.exports = class Client extends EventEmitter
     command: "EXPUNGE"
 
   _searchCriteria: (crit) ->
+    return crit
 
   search: cmd
-    command: (charset, crit) ->
-      com = "SEARCH"
-      if not crit
-        crit = charset
-        charset = null
-
-      if charset
-        command += ' CHARSET ' + charset
-
-      command += ' ' + @_searchCriteria crit
-      return command
+    command: (crit) ->
+      return 'SEARCH CHARSET UTF-8 ' + @_searchCriteria crit
 
   _fetchCriteria: (crit) ->
-
+    return crit
 
   fetch: cmd
     command: (start, end, crit) ->
