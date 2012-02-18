@@ -1045,19 +1045,29 @@ ifset = (c, cb) ->
 
 nosep_list = (cb, end_char, allow_none) ->
   end_char ?= ')'
+  sp_code = ' '.charCodeAt 0
   close_code = end_char.charCodeAt 0
   ->
     results = []
     handler = cb()
     check_done = !!allow_none
     i = 0
+    sep = false
     (data) ->
       if check_done
         return results if data.buf[data.pos] == close_code
         check_done = false
 
+      # HACK: Even though this is supposed to have no separator, Gmail's IMAP
+      # sends addresses in a space separated list
+      if sep and data.buf[data.pos] == sp_code
+        data.pos += 1
+        return
+
+      sep = false
       result = handler data
       return if typeof result == 'undefined'
+      sep = true
       results.push result
       handler = cb()
       check_done = true
