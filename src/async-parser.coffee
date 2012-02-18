@@ -121,7 +121,7 @@ module.exports = class Parser extends Stream
 
 module.exports.SyntaxError = class SyntaxError extends Error
   constructor: (data, rule = '', extra = '') ->
-    context = 10
+    context = 30
     @name = "IMAPSyntaxError"
     {pos, buf} = data
 
@@ -431,7 +431,7 @@ body_ext_mpart = ->
   ]
 
 body_ext_1part = ->
-  series [
+  zip ['md5', 'dsp', 'lang', 'loc', 'ext'], series [
     body_fld_md5()
     ifset ' ', series [ sp(), body_fld_dsp() ], 1
     ifset ' ', series [ sp(), body_fld_lang() ], 1
