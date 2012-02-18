@@ -5,6 +5,17 @@
 # See MIT-LICENSE.txt and GPL-LICENSE.txt
 
 {EventEmitter} = require 'events'
+util = require 'util'
+
+
+p = (resp) ->
+  for own i of resp
+    if Buffer.isBuffer resp[i]
+      resp[i] = resp[i].toString 'utf8'
+    else if typeof resp[i] == 'object'
+      p resp[i]
+  return resp
+
 
 constream = require './imap-connection'
 parser = require './async-parser'
@@ -87,7 +98,9 @@ module.exports = class Client extends EventEmitter
     @_respCallbacks[t] err, resp
 
   _onUntagged: (resp) ->
-    console.log resp
+    console.log util.inspect p(resp), false, 20, true
+    
+  
   _onContinuation: (resp) ->
     cb = @_contQueue.shift()
     if cb
