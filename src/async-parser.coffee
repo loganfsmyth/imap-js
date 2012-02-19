@@ -891,24 +891,48 @@ text = cache ->
 
   onres cb, (result) -> result.toString 'ascii'
 
-quoted_inner = ->
+collector_emit = (type, cb) ->
+  placeholder = null
+  (d, remaining = null) ->
+    if d
+      placeholder ?= cb type, d, remaining, placeholder
+    else
+      return placeholder
+    return
+
+quoted_inner = (emit)->
   slash = '\\'.charCodeAt 0
   quote = '"'.charCodeAt 0
-  cb = collect_until ->
-    escaped = 0
+
+  ->
+    col = null
+    placeholder
+    init = false
+    escaped = false
     (data) ->
+      if not init
+        init = true
+        if emit and data.emit
+          col = collector_emit emit, data.emit
+        else
+          col = collector true
+
+      start = 0
       for code, i in data.buf[data.pos...]
-        if escaped%2 == 1 or code == slash
-          escaped += 1
-          
+        if escaped
+          escaped = false
           if code not in [slash, quote]
             err data, 'quoted_inner', 'Quoted strings can only escape quotes and slashes'
-          continue
-        return i if code == quote
-  , true
+        else if code == slash
+          col data.buf[start...i] if start != i
+          escaped = true
+          start = i+1
+        else if code == quote
+          col data.buf[start...i] if start != i
+          return col()
 
-  onres cb, (result) ->
-    return result.toString('ascii').replace(/\\([\\"])/g, '$1')
+      col data.buf[start...] if start != data.buf.length
+
 
 literal = (emit) ->
   size = literal_size()
@@ -950,6 +974,8 @@ literal_data = (emit)->
         init = true
         if not emit or not data.emit
           col = collector true
+        else
+          col = collector_emit emit, data.emit
 
       len = Math.min data.buf.length - data.pos, remaining
       remaining -= len
@@ -958,13 +984,10 @@ literal_data = (emit)->
       for code in buf when code < 0x01 or code > 0xFF
         err data, 'literal_data', 'Literals can only bytes between 1 and 255'
 
-      if col
-        col buf
-      else
-        placeholder ?= data.emit emit, buf, remaining, placeholder
+      col buf, remaining
 
       if remaining == 0
-        return if col then col().toString('binary') else placeholder
+        return col().toString 'binary'
 
 astring_str = ->
   chars = astring_chars()

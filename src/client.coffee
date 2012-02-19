@@ -39,7 +39,7 @@ module.exports = class Client extends EventEmitter
   constructor: (options) ->
     super()
 
-    #@_emitBody = options?.emit
+    @_emitBody = options?.emit
 
     @_response = {}
     @_respCallbacks = {}
