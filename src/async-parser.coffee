@@ -528,11 +528,12 @@ body_type_1part_main = ->
         result = handler data
         return if typeof result == 'undefined'
         media = result
-        console.log media[0].toString(), media[1].toString()
-        if media[0].toString('ascii') == 'MESSAGE' && media[1].toString('ascii') == 'RFC822'
+        type = media[0].toString('ascii').toUpperCase()
+        subtype = media[1].toString('ascii').toUpperCase()
+        if type == 'MESSAGE' && subtype == 'RFC822'
           # media-message
           handler = body_type_msg()
-        else if media[0].toString('ascii').toUpperCase() == 'TEXT'
+        else if type == 'TEXT'
           # media-text
           handler = body_type_text()
         else
@@ -627,7 +628,7 @@ mbx_list_flags = ->
   space_list join(series [ str('\\'), atom() ]), ')'
 
 nil = cache ->
-  onres str('NIL'), (result) ->
+  onres str('NIL', true), (result) ->
     return null
 
 quoted_char = ->
@@ -943,14 +944,16 @@ list_char_str = ->
   onres cb, (r) -> r.toString 'ascii'
 
 # Match a given string
-str = (s) ->
+str = (s, insens) ->
+  s = s.toUpperCase() if insens
   buffer = new Buffer s
+  mask = if insens then 0xEF else 0xFF
   ->
     i = 0
     (data) ->
       {pos, buf} = data
       while pos < buf.length and i < buffer.length
-        err data, 'str', 'failed to match "' + s + '"' if buf[pos] != buffer[i]
+        err data, 'str', 'failed to match "' + s + '"' if (buf[pos]&mask) != buffer[i]
         i += 1
         pos += 1
       data.pos = pos
@@ -1173,7 +1176,7 @@ oneof = (strs, nomatch) ->
     i = 0
     (data) ->
       for code in data.buf[data.pos...]
-        matches = (str for str in matches when str[i].charCodeAt(0) == code)
+        matches = (s for s in matches when s[i].charCodeAt(0) == code)
         i += 1
         data.pos += 1
         if not matches.length or matches.length == 1 and matches[0].length == i
@@ -1345,7 +1348,7 @@ search_args = ->
   
   nocharset = space_list search_key()
   hascharset = series [
-    str 'CHARSET'
+    str 'CHARSET', true
     sp()
     astring()
     sp()
@@ -1456,7 +1459,7 @@ list_mailbox = ->
 store_att_flags = ->
   zip ['op', 'silent', null, 'flags'], series [
     oneof ['+FLAGS', '-FLAGS', 'FLAGS']
-    ifset '.', str '.SILENT'
+    ifset '.', str '.SILENT', true
     sp()
     starts_with '(', flag_list(), space_list(flag())
   ]
