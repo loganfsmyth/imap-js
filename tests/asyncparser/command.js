@@ -2,7 +2,7 @@
   var b, tests;
 
   b = function(s) {
-    return new Buffer(s);
+    return s;
   };
 
   tests = {

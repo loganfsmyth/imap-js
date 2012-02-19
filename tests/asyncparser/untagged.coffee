@@ -1,7 +1,6 @@
 
 
-b = (s) ->
-  new Buffer s
+b = (s) -> s
 
 tests =
   "* OK word\n":

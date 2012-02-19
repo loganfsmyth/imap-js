@@ -1,4 +1,4 @@
-b = (s) -> new Buffer s
+b = (s) -> s #new Buffer s
 
 tests = 
   "0 NOOP\n":

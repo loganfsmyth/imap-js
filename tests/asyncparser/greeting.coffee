@@ -5,15 +5,15 @@ tests =
   "* OK word\n":
     'type': 'OK'
     'text-code': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* PREAUTH word\n":
     'type': 'PREAUTH'
     'text-code': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* BYE word\n":
     'type': 'BYE'
     'text-code': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "a OK word\n": null
   "* O2 word\n": null
   "*OK word\n": null
@@ -22,118 +22,118 @@ tests =
   "* OK [ALERT] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'ALERT'
+      'key': 'ALERT'
       'value': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [ ALERT] word\n": null
   "* OK [ALERT ] word\n": null
   "* OK [BADCHARSET] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'BADCHARSET'
+      'key': 'BADCHARSET'
       'value': []
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [BADCHARSET (\"word\")] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'BADCHARSET'
-      'value': [ new Buffer 'word' ]
-    'text': new Buffer 'word'
+      'key': 'BADCHARSET'
+      'value': [ 'word' ]
+    'text': 'word'
   "* OK [BADCHARSET (\"word\" \"word2\")] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'BADCHARSET'
-      'value': [ new Buffer('word'), new Buffer('word2') ]
-    'text': new Buffer 'word'
+      'key': 'BADCHARSET'
+      'value': [ 'word', 'word2' ]
+    'text': 'word'
   "* OK [BADCHARSET ()] word\n": null
   "* OK [BADCHARSET \"word\"] word\n": null
   "* OK [BADCHARSET (\"word)] word\n": null
   "* OK [CAPABILITY IMAP4rev1] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'CAPABILITY'
-      'value': [ new Buffer('IMAP4rev1') ]
-    'text': new Buffer 'word'
+      'key': 'CAPABILITY'
+      'value': [ 'IMAP4rev1' ]
+    'text': 'word'
   "* OK [CAPABILITY IMAP4rev1 word2] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'CAPABILITY'
-      'value': [ new Buffer('IMAP4rev1'), new Buffer('word2') ]
-    'text': new Buffer 'word'
+      'key': 'CAPABILITY'
+      'value': [ 'IMAP4rev1', 'word2' ]
+    'text': 'word'
   "* OK [CAPABILITY] word\n": null
   "* OK [CAPABILITY ] word\n": null
   "* OK [PARSE] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'PARSE'
+      'key': 'PARSE'
       'value': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [PERMANENTFLAGS ()] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'PERMANENTFLAGS'
+      'key': 'PERMANENTFLAGS'
       'value': []
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [PERMANENTFLAGS (\\Unseen \\Unread)] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'PERMANENTFLAGS'
-      'value': [ new Buffer('\\Unseen'), new Buffer('\\Unread') ]
-    'text': new Buffer 'word'
+      'key': 'PERMANENTFLAGS'
+      'value': [ '\\Unseen', '\\Unread' ]
+    'text': 'word'
   "* OK [PERMANENTFLAGS] word\n": null
   "* OK [READ-ONLY] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'READ-ONLY'
+      'key': 'READ-ONLY'
       'value': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [READ-WRITE] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'READ-WRITE'
+      'key': 'READ-WRITE'
       'value': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [TRYCREATE] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'TRYCREATE'
+      'key': 'TRYCREATE'
       'value': null
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [UIDNEXT 10] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'UIDNEXT'
+      'key': 'UIDNEXT'
       'value': 10
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [UIDNEXT 0] word\n": null
   "* OK [UIDNEXT] word\n": null
   "* OK [UIDNEXT ] word\n": null
   "* OK [UIDVALIDITY 10] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'UIDVALIDITY'
+      'key': 'UIDVALIDITY'
       'value': 10
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [UNSEEN 10] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'UNSEEN'
+      'key': 'UNSEEN'
       'value': 10
-    'text': new Buffer 'word'
+    'text': 'word'
   "* OK [atom word] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'atom'
-      'value': new Buffer 'word'
-    'text': new Buffer 'word'
+      'key': 'atom'
+      'value': 'word'
+    'text': 'word'
   "* OK [atom ] word\n": null
   "* OK [atom \n] word\n": null
   "* OK [atom] word\n":
     'type': 'OK'
     'text-code':
-      'key': new Buffer 'atom'
+      'key': 'atom'
       'value': null
-     'text': new Buffer 'word'
+     'text': 'word'
 
 module.exports = require('./helper').genTests('greeting', tests)
 

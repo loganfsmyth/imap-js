@@ -4,12 +4,12 @@
 tests =
   "+ OK word\n":
     'text-code': null
-    'text': new Buffer 'OK word'
+    'text': 'OK word'
   "+ [ALERT] word\n":
     'text-code':
-      'key': new Buffer 'ALERT'
+      'key': 'ALERT'
       'value': null
-    'text': new Buffer 'word'
+    'text': 'word'
 
 module.exports = require('./helper').genTests('continuation', tests)
 
