@@ -7,16 +7,6 @@
 {EventEmitter} = require 'events'
 util = require 'util'
 
-
-p = (resp) ->
-  for own i of resp
-    if Buffer.isBuffer resp[i]
-      resp[i] = resp[i].toString 'utf8'
-    else if typeof resp[i] == 'object'
-      p resp[i]
-  return resp
-
-
 constream = require './imap-connection'
 parser = require './async-parser'
 
@@ -58,7 +48,7 @@ module.exports = class Client extends EventEmitter
     @_con = options.stream || constream.createConnection options.port, options.host, options.security == 'ssl'
     
     @_parser = parser.createParser parser.CLIENT
-    @_con.on 'data', (c) -> console.log c.toString 'utf8'
+    #@_con.on 'data', (c) -> console.log c.toString 'utf8'
 
     @_con.on 'connect', =>
       @_con.pipe @_parser
@@ -103,7 +93,6 @@ module.exports = class Client extends EventEmitter
     @_response = {}
 
   _onUntagged: (resp) ->
-    #console.log util.inspect p(resp), false, 20, true
     type = resp.type.toUpperCase()
     switch type
       when "OK", "NO", "BAD", "BYE"
