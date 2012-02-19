@@ -172,7 +172,7 @@ cache = (func) ->
 greeting = ->
   zip [ null, 'type', null, 'text-code', 'text'], series [
     str('* '),
-    oneof(['OK', 'PREAUTH', 'BYE']),
+    oneof(['OK', 'PREAUTH', 'BYE'], false, true),
     sp()
     ifset('[', text_code()),
     text(),
@@ -191,7 +191,7 @@ response_tagged = ->
   cb = series [
     tag()
     sp()
-    oneof ['OK', 'NO', 'BAD']
+    oneof ['OK', 'NO', 'BAD'], false, true
     sp()
     ifset '[', text_code()
     text()
@@ -372,7 +372,7 @@ date_text = ->
   join series [
     starts_with ' ', series([sp(), digits(1)]), digits(2)
     str '-'
-    onres oneof(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']), (result) -> new Buffer result
+    oneof(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], false, true)
     str '-'
     digits(4)
   ]
@@ -382,7 +382,7 @@ date_time = ->
     str '"'
     starts_with ' ', series([sp(), digits(1)]), digits(2)
     str '-'
-    onres oneof(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']), (result) -> new Buffer result
+    oneof(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], false, true)
     str '-'
     digits(4)
     sp()
@@ -404,7 +404,7 @@ time = ->
   ]
 zone = ->
   join series [ 
-    onres oneof(['-', '+']), (res) -> new Buffer res
+    oneof(['-', '+'])
     digits(4)
   ]
 
@@ -698,7 +698,7 @@ status_att = ->
     'UIDNEXT'
     'UIDVALIDITY'
     'UNSEEN'
-  ]
+  ], false, true
 
 status_att_list = ->
   status_att_pair = series [
@@ -1170,9 +1170,9 @@ opt = (c) ->
   starts_with c,
     -> (data) ->
       data.pos += 1
-      new Buffer c
+      c
     -> (data) ->
-      new Buffer 0
+      ''
 
 wrap = (open, close, cb) ->
   series [
@@ -1193,7 +1193,7 @@ join = (cb) ->
         return result.join ''
 
 
-oneof = (strs, nomatch) ->
+oneof = (strs, nomatch, insens) ->
   # TODO preconvert chars to buffers here
   ->
     matches = strs
@@ -1482,7 +1482,7 @@ list_mailbox = ->
 
 store_att_flags = ->
   zip ['op', 'silent', null, 'flags'], series [
-    oneof ['+FLAGS', '-FLAGS', 'FLAGS']
+    oneof ['+FLAGS', '-FLAGS', 'FLAGS'], false, true
     ifset '.', str '.SILENT', true
     sp()
     starts_with '(', flag_list(), space_list(flag())
