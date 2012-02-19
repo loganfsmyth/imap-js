@@ -959,7 +959,6 @@ quoted_inner = (emit)->
 
   ->
     col = null
-    placeholder
     init = false
     escaped = false
     (data) ->
@@ -977,15 +976,18 @@ quoted_inner = (emit)->
           if code not in [slash, quote]
             err data, 'quoted_inner', 'Quoted strings can only escape quotes and slashes'
         else if code == slash
-          col data.buf[start...i], data.emit_arg if start != i
+          col data.buf[data.pos+start...data.pos+i], data.emit_arg if start != i
           escaped = true
           start = i+1
         else if code == quote
-          col data.buf[start...i], data.emit_arg if start != i
-          return col()
+          col data.buf[data.pos+start...data.pos+i], data.emit_arg if start != i
+          ret = col()
+          data.pos += i
+          console.log ret
+          return ret
 
-      col data.buf[start...] if start != data.buf.length
-
+      col data.buf[data.pos+start...] if start != data.buf.length
+      data.pos = data.buf.length
 
 literal = (emit) ->
   size = literal_size()
