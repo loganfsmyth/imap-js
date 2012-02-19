@@ -385,8 +385,6 @@ zone = ->
     digits(4)
   ]
 
-nstring = cache ->
-  starts_with 'N', nil(), string()
 
 address = ->
   cb = paren_wrap series [
@@ -403,20 +401,6 @@ address = ->
 
 addr_name = addr_adl = addr_mailbox = addr_host = ->
   nstring()
-
-
-digits = (num) ->
-  collect_until ->
-    i = 0
-    (data) ->
-      for code, j in data.buf[data.pos...]
-        i++
-        if code not in [0x30..0x39]
-          err data, 'digits', 'expected a number between 0 and 9'
-
-        if i == num
-          return j+1
-      return
 
 
 
@@ -781,6 +765,22 @@ astring = cache ->
     '"': string(),
     '': astring_str(),
   }
+
+nstring = cache ->
+  starts_with 'N', nil(), string()
+
+digits = (num) ->
+  collect_until ->
+    i = 0
+    (data) ->
+      for code, j in data.buf[data.pos...]
+        i++
+        if code not in [0x30..0x39]
+          err data, 'digits', 'expected a number between 0 and 9'
+
+        if i == num
+          return j+1
+      return
 
 number = (nz) ->
   ->
