@@ -637,7 +637,7 @@ quoted_char_inner = ->
   quote = '"'.charCodeAt 0
   slash = '\\'.charCodeAt 0
   chars = text_chars()
-  ->
+  cb = ->
     escaped = false
     (data) ->
       if not escaped
@@ -659,6 +659,8 @@ quoted_char_inner = ->
         return data.buf[data.pos-1...data.pos]
       else
         err data, 'quoted_char_inner', 'Only quotes and slashes can be escaped'
+
+  onres cb, (r) -> r.toString('ascii').replace /\\([\\"])/, '$1'
 
 
 mailbox = cache ->
