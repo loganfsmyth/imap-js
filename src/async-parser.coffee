@@ -5,6 +5,9 @@
 # See MIT-LICENSE.txt and GPL-LICENSE.txt
 
 Stream = require 'stream'
+{Iconv} = require 'iconv'
+
+utf7to8 = new Iconv 'UTF-7', 'UTF-8'
 
 module.exports = class Parser extends Stream
   @CLIENT = CLIENT = 0x01
@@ -136,6 +139,26 @@ module.exports.SyntaxError = class SyntaxError extends Error
       "  " + (" " for i in [0...error]).join('') + "^\n"
 
 
+modifiedUtf7ToUtf8 = (data) ->
+  result = ''
+  start = -1
+  for i in [0...data.length]
+    if data[i] == '-'
+      if start >= 0
+        if i-start == 0
+          result += '&'
+        else
+          result += utf7to8.convert data.slice(start, i+1).replace('&', '+').replace(',', '/')
+        start = -1
+      else
+        result += '-'
+    else if start >= 0
+
+    else if data[i] == '&'
+      start = i
+    else
+      result += data[i]
+  return result
 
 
 cache = (func) ->
@@ -665,7 +688,8 @@ quoted_char_inner = ->
 
 
 mailbox = cache ->
-  astring()
+  cb = astring()
+  onres cb, modifiedUtf7ToUtf8
 
 status_att = ->
   oneof [
