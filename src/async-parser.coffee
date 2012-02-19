@@ -12,15 +12,16 @@ utf7to8 = new Iconv 'UTF-7', 'UTF-8'
 module.exports = class Parser extends Stream
   @CLIENT = CLIENT = 0x01
   @SERVER = SERVER = 0x02
-  @createParser = (type, cbs) ->
-    p = new Parser type
-    if typeof cbs == 'function'
-      p.on 'greeting', cbs
-    else if cbs
-      for own event, cb of cbs
-        p.on event, cb
+  @createParser = (type, emit, cb) ->
+
+    if typeof emit == 'function'
+      cb = emit
+      emit = null
+
+    p = new Parser type, emit
+    p.on 'greeting', cb if cb
     return p
-  constructor: (@type) ->
+  constructor: (@type, @shouldEmit) ->
     @writable = true
     @destroyed = false
     @writing = false
@@ -77,6 +78,12 @@ module.exports = class Parser extends Stream
 
       return
 
+  _handleEmit: (type, data, remaining, name) ->
+    @_count ?= 10
+    name ?= 'C' + (@_count++)
+    @emit type, data, remaining
+    return name
+
   write: (buffer, encoding) ->
     buffer = new Buffer buffer, encoding if not Buffer.isBuffer buffer
     @writing = true
@@ -84,6 +91,7 @@ module.exports = class Parser extends Stream
     data =
       buf: buffer
       pos: 0
+      emit: @shouldEmit and (args...) => @_handleEmit args...
 
     while not @destroyed and data.pos < buffer.length
       try
@@ -317,7 +325,7 @@ msg_att = ->
     section()
     starts_with '<', wrap('<', '>', number()), null_resp()
     sp()
-    nstring()
+    starts_with 'N', nil(), string('body')
   ]
 
 
@@ -828,17 +836,17 @@ number = (nz) ->
         i += 1
         s += String.fromCharCode code
 
-string = cache ->
+string = (emit)->
   lookup {
-    '{': literal(),
-    '"': quoted(),
+    '{': literal(emit),
+    '"': quoted(emit),
     '': ->
       (data) ->
         err data, 'string', 'Expected a { or " at the start of the string.'
   }
 
-quoted = cache ->
-  wrap '"', '"', quoted_inner()
+quoted = (emit) ->
+  wrap '"', '"', quoted_inner(emit)
 
 collect_until = (cb, none) ->
   (arg)->
@@ -931,24 +939,32 @@ literal = (emit) ->
 literal_size = ->
   curly_wrap number()
 
-literal_data = (emit) ->
-  cb = collect_until (size) ->
+literal_data = (emit)->
+  (size) ->
+    init = false
+    col = null
+    placeholder = null
     remaining = size
     (data) ->
+      if not init
+        init = true
+        if not emit or not data.emit
+          col = collector true
+
       len = Math.min data.buf.length - data.pos, remaining
       remaining -= len
       buf = data.buf[data.pos ... data.pos+len]
+      data.pos += len
       for code in buf when code < 0x01 or code > 0xFF
         err data, 'literal_data', 'Literals can only bytes between 1 and 255'
-      return len if remaining == 0
-  , true
 
-  (size) ->
-    handler = cb(size)
-    (data) ->
-      r = handler data
-      return if typeof r == 'undefined'
-      r.toString 'binary'
+      if col
+        col buf
+      else
+        placeholder ?= data.emit emit, buf, remaining, placeholder
+
+      if remaining == 0
+        return if col then col().toString('binary') else placeholder
 
 astring_str = ->
   chars = astring_chars()
@@ -985,12 +1001,12 @@ str = (s, insens) ->
       if i == buffer.length
         return s
 
-collector = ->
+collector = (allow_empty) ->
   buffers = []
   length = 0
   (b) ->
     if not b
-      if length == 0
+      if not allow_empty and length == 0
         return null
       if buffers.length == 1
         all = buffers[0]

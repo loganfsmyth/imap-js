@@ -39,6 +39,8 @@ module.exports = class Client extends EventEmitter
   constructor: (options) ->
     super()
 
+    #@_emitBody = options?.emit
+
     @_response = {}
     @_respCallbacks = {}
     @_contQueue = []
@@ -47,7 +49,7 @@ module.exports = class Client extends EventEmitter
     @_security = options.security
     @_con = options.stream || constream.createConnection options.port, options.host, options.security == 'ssl'
 
-    @_parser = parser.createParser parser.CLIENT
+    @_parser = parser.createParser parser.CLIENT, @_emitBody
     #@_con.on 'data', (c) -> console.log c.toString 'utf8'
 
     @_con.on 'connect', =>
@@ -157,6 +159,7 @@ module.exports = class Client extends EventEmitter
       if cont
         @_contQueue.push =>
           cont args..., (err, buffer) =>
+            #console.log buffer?.toString()
             if buffer and not err
               @_con.write buffer
             else
@@ -328,12 +331,12 @@ module.exports = class Client extends EventEmitter
     return crit
 
   fetch: cmd
-    command: (start, end, crit) ->
-      if not crit
-        crit = end
-        end = null
-      com = "FETCH " + start
-      com += ':' + end if end
+    command: (seq, crit) ->
+      if Array.isArray seq
+        seq = seq.join ','
+      seq = (''+seq).replace ' ', '' # No whitespace
+
+      com = "FETCH " + seq
       com += ' ' + @_fetchCriteria crit
     response: (err, resp, cb) ->
       cb err, resp.fetch, resp
