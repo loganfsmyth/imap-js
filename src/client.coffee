@@ -55,6 +55,8 @@ module.exports = class Client extends EventEmitter
     @_con.on 'connect', =>
       @_con.pipe @_parser
 
+    @_parser.on 'body', (args...) -> console.log util.inspect args, false, 20, true
+
     connected = false
     @_parser.on 'greeting', (greeting) =>
       return if connected

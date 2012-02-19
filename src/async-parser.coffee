@@ -78,10 +78,10 @@ module.exports = class Parser extends Stream
 
       return
 
-  _handleEmit: (type, data, remaining, name) ->
+  _handleEmit: (type, buf, arg, remaining, name) ->
     @_count ?= 10
     name ?= 'C' + (@_count++)
-    @emit type, data, remaining
+    @emit type, buf, arg, remaining
     return name
 
   write: (buffer, encoding) ->
@@ -285,29 +285,56 @@ response_data_types = ->
         'value': result[1]
       else
         'type': key
-        'value': result[1]
-        'id': parseInt result[2], 10
+        'value': result[2]
+        'id': parseInt result[1], 10
 
 response_numeric_types = () ->
-    # number EXISTS | RECENT
-#message-data
-    # nz-number EXPUNGE | FETCH msg-att
-  types = route
-    'EXISTS': null
-    'RECENT': null
-    'EXPUNGE': null
-    'FETCH': series [ sp(), msg_att() ], 1
+  space_cb = sp()
+  fetch_cb = str 'FETCH'
+  msg_att_cb = msg_att()
 
-  cb = series [
-    sp()
-    types
-  ], 1
+  fetch_resp = (key) ->
+    space = space_cb()
+    fetch_handler = fetch_cb()
+    msg_att_handler = msg_att_cb key
+    (data) ->
+      if fetch_handler
+        return if not fetch_handler data
+        if key[0] == 0x30
+          err data, 'fetch_resp', 'FETCH ids must be positive'
+        fetch_handler = null
+      if space
+        return if not space data
+        space = null
+      result = msg_att_handler data
+      return if typeof result == 'undefined'
+      return ['FETCH', key, result]
 
-  onres cb, (result, num) ->
-    if result[0].toString() in['EXPUNGE', 'FETCH'] and num[0] == 0x30 # nz_number
-      err {pos:0,buf:new Buffer 0}, 'response_numeric', 'FETCH and EXPUNGE ids must be positive'
-    result.push num
-    result
+  other_kw = oneof ['EXISTS', 'RECENT', 'EXPUNGE']
+  other_resp = (key) ->
+    handler = other_kw()
+    (data) ->
+      result = handler data
+      return if typeof result == 'undefined'
+      if result == 'EXPUNGE' and key[0] == 0x30
+        err data, 'expunge_resp', 'EXPUNGE ids must be positive'
+      return [result, key]
+
+  f_code = 'F'.charCodeAt 0
+
+  (key) ->
+    handler = null
+    space = space_cb()
+    (data) ->
+      if space
+        return if not space data
+        space = null
+      if not handler
+        if data.buf[data.pos] == f_code
+          handler = fetch_resp key
+        else
+          handler = other_resp key
+      handler data
 
 sp = cache ->
   str ' '
@@ -316,18 +343,44 @@ text_code = cache ->
   series [ bracket_wrap(resp_text_code()), sp() ], 0
 
 
+body_section_data = ->
+  section_cb = section()
+  partial_cb = starts_with '<', wrap('<', '>', number()), null_resp()
+  space_cb = sp()
+  body_cb = starts_with 'N', nil(), string('body')
+
+
+  (id) ->
+    section_handler = section_cb()
+    partial_handler = partial_cb()
+    space_handler = space_cb()
+    body_handler = body_cb()
+    body_data = {}
+    (data) ->
+      if section_handler
+        sec = section_handler data
+        return if typeof sec == 'undefined'
+        body_data.section = sec
+        section_handler = null
+      if partial_handler
+        par = partial_handler data
+        return if typeof par == 'undefined'
+        body_data.partial = par
+        partial_handler = null
+      if space_handler
+        return if not space_handler data
+        space_handler = null
+
+      data.emit_arg = body_data
+      res = body_handler data
+      return if typeof res == 'undefined'
+      body_data.value = res
+      return body_data
+
 msg_att = ->
 
   body_struc = series [ sp(), body() ], 1
   rfc_text = series [ sp(), nstring() ], 1
-
-  body_section_data = zip ['section', 'partial', null, 'value'], series [
-    section()
-    starts_with '<', wrap('<', '>', number()), null_resp()
-    sp()
-    starts_with 'N', nil(), string('body')
-  ]
-
 
   paren_wrap space_list zip ['type', 'value'], route
     'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), ')')) ], 1
@@ -338,7 +391,7 @@ msg_att = ->
     'RFC822.TEXT': rfc_text
     'RFC822.SIZE': series [ sp(), number() ], 1
     'BODYSTRUCTURE': body_struc
-    'BODY': starts_with ' ', body_struc, body_section_data
+    'BODY': starts_with ' ', body_struc, body_section_data()
     'UID': series [ sp(), uniqueid() ], 1
 
 envelope = ->
@@ -893,9 +946,9 @@ text = cache ->
 
 collector_emit = (type, cb) ->
   placeholder = null
-  (d, remaining = null) ->
+  (d, arg, remaining = null) ->
     if d
-      placeholder ?= cb type, d, remaining, placeholder
+      placeholder ?= cb type, d, arg, remaining, placeholder
     else
       return placeholder
     return
@@ -924,11 +977,11 @@ quoted_inner = (emit)->
           if code not in [slash, quote]
             err data, 'quoted_inner', 'Quoted strings can only escape quotes and slashes'
         else if code == slash
-          col data.buf[start...i] if start != i
+          col data.buf[start...i], data.emit_arg if start != i
           escaped = true
           start = i+1
         else if code == quote
-          col data.buf[start...i] if start != i
+          col data.buf[start...i], data.emit_arg if start != i
           return col()
 
       col data.buf[start...] if start != data.buf.length
@@ -984,7 +1037,7 @@ literal_data = (emit)->
       for code in buf when code < 0x01 or code > 0xFF
         err data, 'literal_data', 'Literals can only bytes between 1 and 255'
 
-      col buf, remaining
+      col buf, data.emit_arg, remaining
 
       if remaining == 0
         return col().toString 'binary'
@@ -1114,12 +1167,12 @@ lookup = (map) ->
     else
       k = k.charCodeAt 0
       map[k] = v
-  ->
+  (arg) ->
     handler = null
     (data) ->
       if not handler
         c = data.buf[data.pos]
-        handler = if map[c] then map[c]() else map[0]()
+        handler = if map[c] then map[c](arg) else map[0](arg)
       handler data
 
 
@@ -1170,9 +1223,9 @@ sep_list = (sep_char, none_char, cb) ->
 
   sepcode = sep_char.charCodeAt 0
   none_code = none_char and none_char.charCodeAt 0
-  ->
+  (arg) ->
     results = []
-    handler = cb()
+    handler = cb(arg)
     sep = true
     i = 0
     (data) ->
@@ -1189,7 +1242,7 @@ sep_list = (sep_char, none_char, cb) ->
           return results
         sep = false
         data.pos += 1
-        handler = cb()
+        handler = cb(arg)
         return
 
       result = handler data
@@ -1267,7 +1320,7 @@ route_key = ->
 
 route = (routes, nomatch) ->
   key_cb = route_key()
-  ->
+  (arg) ->
     key = null
     key_func = key_cb()
     nomatch_func = null
@@ -1280,7 +1333,7 @@ route = (routes, nomatch) ->
         return if typeof key == 'undefined'
         key_str = key.toString 'ascii'
         if routes[key_str]
-          route_func = routes[key_str]()
+          route_func = routes[key_str](arg)
         else if typeof routes[key] == 'undefined'
           if nomatch
             nomatch_func = nomatch key
@@ -1297,9 +1350,9 @@ route = (routes, nomatch) ->
 # Given an array of match functions, parse until all are complete and return
 # array containing the results
 series = (parts, ids) ->
-  ->
+  (arg) ->
     i = 0
-    handler = parts[i]()
+    handler = parts[i](arg)
     ret = []
     (data) ->
       result = handler data
@@ -1314,7 +1367,7 @@ series = (parts, ids) ->
           ret[ids]
         else
           (ret[j] for j in ids)
-      handler = parts[i]()
+      handler = parts[i](arg)
       return
 
 # Zip an array of keys and a callback that returns an array
