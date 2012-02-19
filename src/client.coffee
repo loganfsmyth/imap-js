@@ -250,12 +250,14 @@ module.exports = class Client extends EventEmitter
       cb err, resp.status
 
   append: cmd
-    command: (mailbox, flags, datetime, bytes) ->
+    command: (mailbox, flags, datetime, bytes, stream) ->
       if !Array.isArray flags
+        stream = bytes
         bytes = datetime
         datetime = flags
         flags = null
       if datetime not instanceof Date
+        stream = bytes
         bytes = datetime
         datetime = null
 
@@ -267,20 +269,40 @@ module.exports = class Client extends EventEmitter
         com += Buffer.byteLength bytes
       else if Buffer.isBuffer bytes
         com += bytes.length
+      else
+        # Pause the stream to not emit until continuation
+        stream.pause()
+        com += bytes # Assume bytes is the number of bytes
       com += '}'
       return com
-    continue: (mailbox, flags, datetime, bytes, cb) ->
+    continue: (mailbox, flags, datetime, bytes, stream, cb) ->
       if !Array.isArray flags
-        cb = bytes
+        cb = stream
+        stream = bytes
         bytes = datetime
         datetime = flags
         flags = null
       if datetime not instanceof Date
-        cb = bytes
+        cb = stream
+        stream = bytes
         bytes = datetime
         datetime = null
-      cb null, bytes
-      cb()
+      
+      if not cb
+        cb = stream
+        stream = null
+      
+      if stream
+        stream.resume()
+        stream.on 'data', (c) ->
+          # TODO: Limit length to bytes
+          cb null, c
+        stream.on 'end', ->
+          cb()
+
+      else
+        cb null, bytes
+        cb()
 
   check: cmd
     command: "CHECK"
