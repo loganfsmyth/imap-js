@@ -46,7 +46,7 @@ module.exports = class Client extends EventEmitter
     options.security ?= 'none'
     @_security = options.security
     @_con = options.stream || constream.createConnection options.port, options.host, options.security == 'ssl'
-    
+
     @_parser = parser.createParser parser.CLIENT
     #@_con.on 'data', (c) -> console.log c.toString 'utf8'
 
@@ -170,7 +170,6 @@ module.exports = class Client extends EventEmitter
 
   noop: cmd
     command: 'NOOP'
-    # No response
 
   logout: cmd
     command: 'LOGOUT'
@@ -250,39 +249,6 @@ module.exports = class Client extends EventEmitter
     response: (err, resp, cb) ->
       cb err, resp.status
 
-  _dateToDatetime: (d) ->
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    com = ''
-    com += '0' if d.getDate() < 10
-    com += d.getDate() + '-'
-    com += months[d.getMonth()] + '-'
-    com += d.getFullYear() + ' '
-
-
-    com += '0' if d.getHours() < 10
-    com += d.getHours() + ':'
-    com += '0' if d.getMinutes() < 10
-    com += d.getMinutes() + ':'
-    com += '0' if d.getSeconds() < 10
-    com += d.getSeconds()
-
-    com += ' '
-
-    min = d.getTimezoneOffset()
-    if min < 0
-      com += '-'
-      min *= -1
-    else
-      com += '+'
-    hours = min/60
-    min = min%60
-    com += '0' if hours < 10
-    com += hours
-    com += '0' if min < 10
-    com += min
-
-    return com
-
   append: cmd
     command: (mailbox, flags, datetime, bytes) ->
       if !Array.isArray flags
@@ -295,7 +261,7 @@ module.exports = class Client extends EventEmitter
 
       com = "APPEND #{q mailbox} "
       com += "(#{flags.join ' '}) " if flags
-      com += '"' + @_dateToDatetime(datetime) + '" ' if datetime
+      com += '"' + dateToDatetime(datetime) + '" ' if datetime
       com += '{'
       if typeof bytes == 'string'
         com += Buffer.byteLength bytes
@@ -379,16 +345,40 @@ module.exports = class Client extends EventEmitter
       com += q mailbox
       return com
 
-  uid: cmd
+  #uid: cmd
 
 
+# Format an RFC822 Datetime
+dateToDatetime = (d) ->
+  months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  com = ''
+  com += '0' if d.getDate() < 10
+  com += d.getDate() + '-'
+  com += months[d.getMonth()] + '-'
+  com += d.getFullYear() + ' '
 
 
+  com += '0' if d.getHours() < 10
+  com += d.getHours() + ':'
+  com += '0' if d.getMinutes() < 10
+  com += d.getMinutes() + ':'
+  com += '0' if d.getSeconds() < 10
+  com += d.getSeconds()
 
+  com += ' '
 
+  min = d.getTimezoneOffset()
+  if min < 0
+    com += '-'
+    min *= -1
+  else
+    com += '+'
+  hours = min/60
+  min = min%60
+  com += '0' if hours < 10
+  com += hours
+  com += '0' if min < 10
+  com += min
 
-
-
-
-
+  return com
 
