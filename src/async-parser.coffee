@@ -685,9 +685,11 @@ status_att_list = ->
 
 tag = ->
   chars = astring_chars()
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
+
+  onres cb, (result) -> result.toString 'ascii'
 
 resp_text_code = ->
   space_num           = series [ sp(), number true ], 1
@@ -770,7 +772,7 @@ nstring = cache ->
   starts_with 'N', nil(), string()
 
 digits = (num) ->
-  collect_until ->
+  cb = collect_until ->
     i = 0
     (data) ->
       for code, j in data.buf[data.pos...]
@@ -781,6 +783,8 @@ digits = (num) ->
         if i == num
           return j+1
       return
+
+  onres cb, (r) -> r.toString 'ascii'
 
 number = (nz) ->
   ->
@@ -829,29 +833,33 @@ collect_until = (cb, none) ->
 textchar_str = ->
   chars = text_chars()
   brac = ']'.charCodeAt 0
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars or code == brac
 
+  onres cb, (result) -> result.toString 'ascii'
+
 atom = cache ->
   chars = atom_chars()
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
+  onres cb, (result) -> result.toString 'ascii'
 
 
 text = cache ->
   cr = "\r".charCodeAt 0
   lf = "\n".charCodeAt 0
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code in [cr, lf]
 
+  onres cb, (result) -> result.toString 'ascii'
 
 quoted_inner = ->
   slash = '\\'.charCodeAt 0
   quote = '"'.charCodeAt 0
-  collect_until ->
+  cb = collect_until ->
     escaped = 0
     (data) ->
       for code, i in data.buf[data.pos...]
@@ -863,6 +871,9 @@ quoted_inner = ->
           continue
         return i if code == quote
   , true
+
+  onres cb, (result) ->
+    return result.toString('ascii').replace(/\\([\\"])/g, '$1')
 
 literal = (emit) ->
   size = literal_size()
@@ -894,29 +905,40 @@ literal_size = ->
   curly_wrap number()
 
 literal_data = (emit) ->
-  collect_until (size) ->
+  cb = collect_until (size) ->
     remaining = size
     (data) ->
       len = Math.min data.buf.length - data.pos, remaining
       remaining -= len
       buf = data.buf[data.pos ... data.pos+len]
-      for code in buf when code not in [0x01..0xFF]
+      for code in buf when code < 0x01 or code > 0xFF
         err data, 'literal_data', 'Literals can only bytes between 1 and 255'
       return len if remaining == 0
   , true
 
+  (size) ->
+    handler = cb(size)
+    (data) ->
+      r = handler data
+      return if typeof r == 'undefined'
+      r.toString 'binary'
+
 astring_str = ->
   chars = astring_chars()
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in chars
 
+  onres cb, (r) -> r.toString 'ascii'
+
 list_char_str = ->
   chars = list_chars()
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       if code not in chars
         return i
+
+  onres cb, (r) -> r.toString 'ascii'
 
 # Match a given string
 str = (s) ->
@@ -932,7 +954,7 @@ str = (s) ->
       data.pos = pos
 
       if i == buffer.length
-        return buffer
+        return s
 
 collector = ->
   buffers = []
@@ -1134,13 +1156,11 @@ err = (data, rule, extra) ->
 
 join = (cb) ->
   ->
-    col = collector()
     data_cb = cb()
     (data) ->
       result = data_cb data
       if typeof result != 'undefined'
-        (col b for b in result)
-        return col()
+        return result.join ''
 
 
 oneof = (strs, nomatch) ->
@@ -1169,9 +1189,12 @@ route_key = ->
   lower = [0x61..0x7A]
   dash = '-'.charCodeAt 0
   dot = '.'.charCodeAt 0
-  collect_until -> (data) ->
+  cb = collect_until -> (data) ->
     for code, i in data.buf[data.pos...]
       return i if code not in [dash,dot] and code not in nums and code not in upper and code not in lower
+
+  onres cb, (result) ->
+    result.toString 'ascii'
 
 route = (routes, nomatch) ->
   key_cb = route_key()
@@ -1235,7 +1258,7 @@ zip = (keys, cb) ->
 
 onres = (cb, res_cb) ->
   (args...)->
-    handler = cb()
+    handler = cb(args...)
     (data) ->
       result = handler data
       return if typeof result == 'undefined'
