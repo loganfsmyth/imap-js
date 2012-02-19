@@ -124,9 +124,6 @@ module.exports = class Client extends EventEmitter
               @_con.write buffer
             else
               @_con.write "\r\n", 'ascii'
-              # TODO: What now?
-
-
       return
 
   capability: cmd

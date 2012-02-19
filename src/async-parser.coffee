@@ -1083,8 +1083,9 @@ nosep_list = (cb, end_char, allow_none) ->
       # HACK: Even though this is supposed to have no separator, Gmail's IMAP
       # sends addresses in a space separated list
       if sep and data.buf[data.pos] == sp_code
+        sep = false
         data.pos += 1
-        return
+        return if data.pos == data.buf.length
 
       sep = false
       result = handler data
