@@ -49,6 +49,7 @@ module.exports = class Client extends EventEmitter
   constructor: (options) ->
     super()
 
+    @_response = {}
     @_respCallbacks = {}
     @_contQueue = []
     options.host ?= 'localhost'
@@ -95,12 +96,57 @@ module.exports = class Client extends EventEmitter
     else if resp.type == 'NO'
       err = new CommandFailure resp
 
-    @_respCallbacks[t] err, resp
+    @_onUntagged resp
+    @_response.text = resp.text
+    @_response.type = resp.type
+    @_respCallbacks[t] err, @_response
+    @_response = {}
 
   _onUntagged: (resp) ->
-    console.log util.inspect p(resp), false, 20, true
-    
-  
+    #console.log util.inspect p(resp), false, 20, true
+    type = resp.type.toUpperCase()
+    switch type
+      when "OK", "NO", "BAD", "BYE"
+        code = resp['text-code']
+        value =
+          type: type
+          text: resp.text
+          key: code and code.key.toUpperCase()
+          value: code and code.value
+        if code
+          @_response.state ?= {}
+          @_response.state[value.key] = value
+        @_response.bye = type == 'BYE'
+
+      when "CAPABILITY"
+        @_response.state ?= {}
+        @_response.state['CAPABILITY'] = resp.value
+
+      when "FLAGS"
+        @_response.flags = resp.value
+      when "LIST", "LSUB"
+        (@_response[type.toLowerCase()] ?= []).push resp.value
+      when "SEARCH"
+        @_response.search = resp.value
+      when "STATUS"
+        val = resp.value
+        @_response.status ?= {}
+        @_response.status[val.mailbox] = val.attributes
+      when "EXISTS"
+        @_response.exists = resp.id
+      when "RECENT"
+        @_response.recent = resp.id
+
+      when "EXPUNGE"
+        @_response.expunge ?= []
+        # TODO: Adjust these ids?
+        @_response.expunge.push resp.value
+      when "FETCH"
+        @_response.fetch ?= {}
+        @_response.fetch[resp.id] = resp.value
+      else
+        console.log "Unexpected response type: " + type
+
   _onContinuation: (resp) ->
     cb = @_contQueue.shift()
     if cb
@@ -115,12 +161,14 @@ module.exports = class Client extends EventEmitter
 
       console.log command
       @_con.write command
-      @_respCallbacks[t] = if not response then cb else (err, resp) => response.call @, err, resp, cb
+      @_respCallbacks[t] = if not response
+        (err, resp) -> cb err, null, resp
+      else
+        (err, resp) => response.call @, err, resp, cb
       if cont
         @_contQueue.push =>
           cont args..., (err, buffer) =>
             if buffer and not err
-              console.log 'writing ' + buffer.length + ' bytes'
               @_con.write buffer
             else
               @_con.write "\r\n", 'ascii'
@@ -128,9 +176,12 @@ module.exports = class Client extends EventEmitter
 
   capability: cmd
     command: 'CAPABILITY'
+    response: (err, resp, cb) ->
+      cb err, resp.state?['CAPABILITY']
 
   noop: cmd
     command: 'NOOP'
+    # No response
 
   logout: cmd
     command: 'LOGOUT'
@@ -147,15 +198,38 @@ module.exports = class Client extends EventEmitter
 
   authenticate: cmd
     command: (mech) -> "AUTHENTICATE #{mech}"
+    # TODO
 
   login: cmd
     command: (user,pass) -> "LOGIN #{q user} #{q pass}"
 
   select: cmd
     command: (mailbox) -> "SELECT #{q mailbox}"
+    response: (err, resp, cb) ->
+      cb err,
+        flags: resp.flags
+        exists: resp.exists
+        recent: resp.recent
+        # Need to check OK on these?
+        unseen: resp.state['UNSEEN']?.value
+        permanentflags: resp.state['PERMANENTFLAGS']?.value
+        uidnext: resp.state['UIDNEXT']?.value
+        uidvalidity: resp.state['UIDVALIDITY']?.value
+      , resp
 
   examine: cmd
     command: (mailbox) -> "EXAMINE #{q mailbox}"
+    response: (err, resp, cb) ->
+      cb err,
+        flags: resp.flags
+        exists: resp.exists
+        recent: resp.recent
+        # Need to check OK on these?
+        unseen: resp.state['UNSEEN']?.value
+        permanentflags: resp.state['PERMANENTFLAGS']?.value
+        uidnext: resp.state['UIDNEXT']?.value
+        uidvalidity: resp.state['UIDVALIDITY']?.value
+      , resp
 
   create: cmd
     command: (mailbox) -> "CREATE #{q mailbox}"
@@ -174,12 +248,18 @@ module.exports = class Client extends EventEmitter
 
   list: cmd
     command: (name, mailbox) -> "LIST #{q name} #{q mailbox}"
+    response: (err, resp, cb) ->
+      cb err, resp.list
 
   lsub: cmd
     command: (name, mailbox) -> "LSUB #{q name} #{q mailbox}"
+    response: (err, resp, cb) ->
+      cb err, resp.lsub
 
   status: cmd
     command: (mailbox, item_names) -> "STATUS #{q mailbox} (#{item_names.join ' '})"
+    response: (err, resp, cb) ->
+      cb err, resp.status
 
   _dateToDatetime: (d) ->
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -255,6 +335,8 @@ module.exports = class Client extends EventEmitter
 
   expunge: cmd
     command: "EXPUNGE"
+    response: (err, resp, cb) ->
+      cb err, resp.expunge, resp
 
   _searchCriteria: (crit) ->
     return crit
@@ -262,6 +344,8 @@ module.exports = class Client extends EventEmitter
   search: cmd
     command: (crit) ->
       return 'SEARCH CHARSET UTF-8 ' + @_searchCriteria crit
+    response: (err, resp, cb) ->
+      cb err, resp.search, resp
 
   _fetchCriteria: (crit) ->
     return crit
@@ -274,6 +358,8 @@ module.exports = class Client extends EventEmitter
       com = "FETCH " + start
       com += ':' + end if end
       com += ' ' + @_fetchCriteria crit
+    response: (err, resp, cb) ->
+      cb err, resp.fetch, resp
 
   store: cmd
     command: (start, end, op, flags) ->
@@ -291,6 +377,8 @@ module.exports = class Client extends EventEmitter
       com += 'FLAGS '
       com += "(#{flags.join ' '})"
       return com
+    response: (err, resp, cb) ->
+      cb err, resp.fetch, resp
 
   copy: cmd
     command: (start, end, mailbox) ->
