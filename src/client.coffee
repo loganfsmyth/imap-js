@@ -40,6 +40,9 @@ module.exports = class Client extends EventEmitter
       @message = resp.text.toString()
 
   @createClient = (options, cb) ->
+    if typeof options == 'function'
+      cb = options
+      options = null
     client = new Client options
     client.on 'connect', cb if cb
     return client
@@ -47,13 +50,13 @@ module.exports = class Client extends EventEmitter
   constructor: (options) ->
     super()
 
+    options.security ?= 'none'
+
     @_response = {}
     @_respCallbacks = {}
     @_contQueue = []
-    options.host ?= 'localhost'
-    options.security ?= 'none'
     @_security = options.security
-    @_con = options.stream || constream.createConnection options.port, options.host, options.security == 'ssl'
+    @_con = options.stream || constream.createConnection options
 
     @_parser = parser.createParser parser.CLIENT
     #@_con.on 'data', (c) -> console.log c.toString 'utf8'

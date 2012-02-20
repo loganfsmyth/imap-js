@@ -9,17 +9,23 @@ net     = require 'net'
 crypto  = require 'crypto'
 Stream  = require 'stream'
 
-exports.createConnection = (port, host, secure, cb) ->
-  stream = new ConnectionStream port, host, secure
+exports.createConnection = (options, cb) ->
+  stream = new ConnectionStream options
   stream.on 'connect', cb if cb
   return stream
 
 
 exports.ConnectionStream = class ConnectionStream extends Stream
-  constructor: (port, host, @secure) ->
+  constructor: (options) ->
+    options ?= {}
+    port = options.port
+    host = options.host || 'localhost'
+    tlsoptions = options.tlsoptions
+    @secure = options.security == 'ssl'
+    
     if @secure
       port ?= 993
-      @_stream = tls.connect port, host, =>
+      @_stream = tls.connect port, host, tlsoptions, =>
         #stream.authorizationError if cb and not stream.authorized and not tlsoptions.allowUnauthorized
         @emit 'connect'
       @socket = @_stream.socket
