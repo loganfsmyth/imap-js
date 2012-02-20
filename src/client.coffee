@@ -11,17 +11,6 @@ constream = require './connection'
 parser = require './parser'
 
 module.exports = class Client extends EventEmitter
-  tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
-  tagCount = 1
-  tag = ->
-    count = tagCount++
-    len = tagChars.length
-    tagVal = ''
-    while count >= 1
-      i = Math.floor count%len
-      count /= len
-      tagVal = tagChars[i] + tagVal
-    return tagVal
 
   cmd = (options) ->
     (args..., cb) -> @_handleCommand options, args, cb
@@ -67,6 +56,7 @@ module.exports = class Client extends EventEmitter
     super()
 
     @_security = options.security
+    @_tagCount = 0
     @connected = false
 
     # Initialize empty response object, filled as data arrived.
@@ -278,7 +268,7 @@ module.exports = class Client extends EventEmitter
   #
   _handleCommand: ({command, response, continue: cont}, args, cb) ->
       # Build the command string using tag, command str/func and final newline.
-      t = tag()
+      t = tag ++@_tagCount
       command = command.apply @, args if typeof command == 'function'
       command = t + ' ' + command + '\r\n'
       @_con.write command
@@ -567,6 +557,18 @@ module.exports = class Client extends EventEmitter
       return "COPY " + seq + ' ' + q mailbox
 
   #uid: cmd
+
+
+tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
+tag = (tagCount)->
+  count = tagCount++
+  len = tagChars.length
+  tagVal = ''
+  while count >= 1
+    i = Math.floor count%len
+    count /= len
+    tagVal = tagChars[i] + tagVal
+  return tagVal
 
 
 # Format an RFC822 Datetime
