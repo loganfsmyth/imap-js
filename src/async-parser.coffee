@@ -956,8 +956,11 @@ text = cache ->
 collector_emit = (type, cb) ->
   placeholder = null
   (d, arg, remaining = null) ->
+
     if d
-      placeholder ?= cb type, d, arg, remaining, placeholder
+      #console.log d.toString()
+      ret = cb type, d, arg, remaining, placeholder
+      placeholder ?= ret
     else
       return placeholder
     return
