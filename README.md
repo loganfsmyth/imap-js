@@ -1,20 +1,14 @@
 
-# NodeJS Javascript/C IMAP Client
+# NodeJS IMAP Client
 
 This is an IMAP library meant to implement the full set of IMAP commands
 specified in RFC 3501 as specified here: http://www.faqs.org/rfcs/rfc3501.html 
-Basic wrappers will also be provided, building on top of the standard commands, 
-to allow for object-oriented access to mailboxes and messages.
-
-The objective of this project is to write a fast parser for the IMAP protocol 
-by taking the complex tokenizing step out of javascript and moving it to C, while 
-keeping the object generation and general client libraries in Javascript for simplicity.
 
 # API
 
 ## ImapClient
 
-ImapClient(host, port, security, /* options*/ , cb)
+ImapClient(options)
 
 * capability()
 * noop()
@@ -32,21 +26,22 @@ ImapClient(host, port, security, /* options*/ , cb)
 * list( refname, mailbox )
 * lsub( refname, mailbox )
 * status( mailbox, items )
-* append( mailbox, message, flags, datetime )
+* append( mailbox, flags, datetime, bytes, /*readstream*/)
 * check()
 * close()
 * expunge()
-* search( criteria, charset, uid )
+* search( criteria, uid )
 * fetch( seqset, items, uid )
 * store( seqset, action, flags, uid )
 * copy( seqset, mailbox, uid )
 
 
-# Current Status
+# TODO
 
-All IMAP commands are defined, and return properly, but character-set conversion 
-have not been implemented in most places. Because there is still work to be done
-at the lower level, the object-oriented wrappers remain as a TODO for the time being.
+* All the standard IMAP commands work except for authenticate, but the client still needs to be tested under real usage.
+* Add some basic wrappers to make it easier to use the client.
+* Add support for extensions based on server capabilities
+* Re-implement the parser, possibly in C. Attempted with some success, but it was too unmaintainable.
 
 # License
 
