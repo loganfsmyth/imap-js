@@ -541,16 +541,15 @@ media_subtype = ->
   string()
 
 body_type_mpart = ->
-  series [
-    nosep_list(-> do body())
+  zip ['body', null, 'subtype', 'ext'], series [
+    nosep_list((-> do body()), ' ')
     sp()
     media_subtype()
     ifset ' ', series [sp(), body_ext_mpart()], 1
-  ], [0, 2, 3]
-
+  ]
 
 body_type_1part = ->
-  series [
+  zip ['body', 'ext'], series [
     body_type_1part_main()
     ifset ' ', series [ sp(), body_ext_1part() ], 1
   ]
@@ -983,8 +982,7 @@ quoted_inner = (emit)->
           col data.buf[data.pos+start...data.pos+i], data.emit_arg if start != i
           ret = col()
           data.pos += i
-          console.log ret
-          return ret
+          return ret.toString('binary')
 
       col data.buf[data.pos+start...] if start != data.buf.length
       data.pos = data.buf.length
