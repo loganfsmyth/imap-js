@@ -2,22 +2,14 @@
 COFFEE_SRC = \
   src/*.coffee
 
-C_SRC = \
-  src/imap_parser.cc        \
-  src/imap_parser.h         \
-  src/node_imap_parser.cc
 
-
-build: build_native build_coffee build_docs
+build: build_coffee build_docs
 
 watch_coffee: ${COFFEE_SRC}
 	coffee --compile --watch --output lib/ ${COFFEE_SRC}
 
 build_coffee: ${COFFEE_SRC}
 	coffee --compile --output lib/ ${COFFEE_SRC}
-
-build_native: ${C_SRC}
-	cd src && node-waf configure && node-waf build
 
 build_docs: ${COFFEE_SRC}
 	docco ${COFFEE_SRC}
