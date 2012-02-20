@@ -11,9 +11,17 @@ constream = require './connection'
 parser = require './parser'
 
 module.exports = class Client extends EventEmitter
-  tagCount = 0
+  tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
+  tagCount = 1
   tag = ->
-    return ''+tagCount
+    count = tagCount++
+    len = tagChars.length
+    tagVal = ''
+    while count >= 1
+      i = Math.floor count%len
+      count /= len
+      tagVal = tagChars[i] + tagVal
+    return tagVal
 
   cmd = (options) ->
     (args..., cb) -> @_handleCommand options, args, cb
@@ -328,6 +336,30 @@ module.exports = class Client extends EventEmitter
   _searchCriteria: (crit) ->
     return crit
 
+  # ### search
+  # * *criteria*  - An array of search criteria.
+  # * *charset*   - The charset to use. (Optional)
+  # * *uid*       - Boolean indicating if results should be returned
+  #                 as a uid instead of sequence number.
+  #
+  # Searches the current mailbox using the given criteria, returning a list of
+  # ids for the matching messages.
+  #
+  # Criteria include:
+  #
+  # * A sequence set.
+  # * ALL, ANSWERED, DELETED, DRAFT, FLAGGED, NEW, OLD, RECENT, SEEN, UNANSWERED
+  # * UNDELETED, UNDRAFT, UNFLAGGED, UNSEEN
+  # * BCC|FROM|CC|TO < email address >
+  # * BEFORE|SENTBEFORE|SENTON|SENTSINCE|SINCE < rfc2822 date >
+  # * BODY|TEXT|SUBJECT
+  # * KEYWORD|UNKEYWORD < flag >
+  # * UID < sequence set >
+  # * LARGER|SMALLER < bytes >
+  # * HEADER < field > < str >
+  # * OR < crit 1 > < crit 2 >
+  # * NOT < crit >
+  #
   search: cmd
     command: (crit) ->
       return 'SEARCH CHARSET UTF-8 ' + @_searchCriteria crit
@@ -337,6 +369,26 @@ module.exports = class Client extends EventEmitter
   _fetchCriteria: (crit) ->
     return crit
 
+  # ### fetch
+  # * *seqset*  - A sequence of messages to get.
+  # * *items*   - A array of items to get for each message.
+  #
+  # Fetches data about a set of messages.
+  #
+  # Items include:
+  #
+  # * ALL  - FLAGS, INTERNALDATE, RFC822.SIZE, ENVELOPE
+  # * FAST - FLAGS, INTERNALDATE, RFC822.SIZE
+  # * FULL - FLAGS, INTERNALDATE, RFC822.SIZE, ENVELOPE, BODY
+  # * BODY
+  # * BODY[section]<partial>
+  # * BODY.PEEK[section]<partial>
+  # * BODYSTRUCTURE
+  # * ENVELOPE
+  # * FLAGS
+  # * INTERNALDATE
+  # * RFC822, RFC822.HEADER, RFC822.SIZE, RFC822.TEXT
+  # * UID
   fetch: cmd
     command: (seq, crit) ->
       if Array.isArray seq
