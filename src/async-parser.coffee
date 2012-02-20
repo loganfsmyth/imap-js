@@ -12,16 +12,11 @@ utf7to8 = new Iconv 'UTF-7', 'UTF-8'
 module.exports = class Parser extends Stream
   @CLIENT = CLIENT = 0x01
   @SERVER = SERVER = 0x02
-  @createParser = (type, emit, cb) ->
-
-    if typeof emit == 'function'
-      cb = emit
-      emit = null
-
-    p = new Parser type, emit
+  @createParser = (type, cb) ->
+    p = new Parser type
     p.on 'greeting', cb if cb
     return p
-  constructor: (@type, @shouldEmit) ->
+  constructor: (@type) ->
     @writable = true
     @destroyed = false
     @writing = false
@@ -33,6 +28,12 @@ module.exports = class Parser extends Stream
     else
       throw Error "Parser type must be client or server."
 
+  emitEnabled: (stat) ->
+    if @partial
+      @_setShouldEmit = stat
+    else
+      @_shouldEmit = stat
+
   _greeting: () ->
     greet = greeting()
     @parser = (data) =>
@@ -41,11 +42,12 @@ module.exports = class Parser extends Stream
       return if not result
       @partial = data.pos != data.buf.length
 
-      #console.log 'Greeting:'
-      #console.log result
-
       @_response()
       @emit 'greeting', result
+
+      if not @partial and @_setShouldEmit?
+        @_shouldEmit = @_setShouldEmit
+        @_setShouldEmit = null
 
       return
 
@@ -63,6 +65,10 @@ module.exports = class Parser extends Stream
       return if type not in ['tagged', 'untagged', 'continuation']
       @emit type, response
 
+      if not @partial and @_setShouldEmit?
+        @_shouldEmit = @_setShouldEmit
+        @_setShouldEmit = null
+
       return
 
   _command: ->
@@ -75,6 +81,10 @@ module.exports = class Parser extends Stream
 
       @_command()
       @emit 'command', result
+
+      if not @partial and @_setShouldEmit?
+        @_shouldEmit = @_setShouldEmit
+        @_setShouldEmit = null
 
       return
 
@@ -91,7 +101,7 @@ module.exports = class Parser extends Stream
     data =
       buf: buffer
       pos: 0
-      emit: @shouldEmit and (args...) => @_handleEmit args...
+      emit: @_shouldEmit and (args...) => @_handleEmit args...
 
     while not @destroyed and data.pos < buffer.length
       try

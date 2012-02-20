@@ -39,8 +39,6 @@ module.exports = class Client extends EventEmitter
   constructor: (options) ->
     super()
 
-    @_emitBody = options?.emit
-
     @_response = {}
     @_respCallbacks = {}
     @_contQueue = []
@@ -49,13 +47,15 @@ module.exports = class Client extends EventEmitter
     @_security = options.security
     @_con = options.stream || constream.createConnection options.port, options.host, options.security == 'ssl'
 
-    @_parser = parser.createParser parser.CLIENT, @_emitBody
+    @_parser = parser.createParser parser.CLIENT
     #@_con.on 'data', (c) -> console.log c.toString 'utf8'
 
     @_con.on 'connect', =>
       @_con.pipe @_parser
 
-    @_parser.on 'body', (args...) -> console.log util.inspect args, false, 20, true
+#    @_parser.on 'body', (args...) ->
+#      console.log util.inspect args, false, 20, true
+#      console.log args[0].toString()
 
     connected = false
     @_parser.on 'greeting', (greeting) =>
@@ -75,6 +75,11 @@ module.exports = class Client extends EventEmitter
     @_con.on 'error', (e) => @emit 'error', e
     @_con.on 'close', (e) => @emit 'close', e
     @_con.on 'end', => @emit 'close'
+
+    @emitEnabled options?.emit
+
+  emitEnabled: (stat) ->
+    @_parser.emitEnabled stat
 
   _onGreeting: (greeting) ->
     if @_security == 'tls'
