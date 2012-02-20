@@ -33,6 +33,7 @@ module.exports = class Parser extends Stream
       @_setShouldEmit = stat
     else
       @_shouldEmit = stat
+    @_shouldEmit
 
   _greeting: () ->
     greet = greeting()
@@ -955,13 +956,17 @@ text = cache ->
 
 collector_emit = (type, cb) ->
   placeholder = null
+  ended = false
   (d, arg, remaining = null) ->
 
     if d
-      #console.log d.toString()
       ret = cb type, d, arg, remaining, placeholder
       placeholder ?= ret
+      ended = remaining == 0
     else
+      if not ended
+        ret = cb type, new Buffer(0), arg, 0, placeholder
+        placeholder ?= ret
       return placeholder
     return
 
