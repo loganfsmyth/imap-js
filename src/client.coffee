@@ -12,17 +12,19 @@ parser = require './parser'
 
 module.exports = class Client extends EventEmitter
 
-  cmd = (options) ->
-    (args..., cb) -> @_handleCommand options, args, cb
+  # Helper for defining new commands. Delegates to _handleCommand.
+  cmd = (options) -> (args..., cb) -> @_handleCommand options, args, cb
 
-  q = (str) ->
-    '"' + str.replace(/(["\\])/g,"\\$1") + '"'
+  # Helper to wrap strings in quotes and escape chars.
+  q = (str) -> '"' + str.replace(/(["\\])/g,"\\$1") + '"'
 
+  # Error class used when BAD responses are received.
   @CommandError = class CommandError extends Error
     constructor: (resp) ->
       @name = "CommandError"
       @message = resp.text.toString()
 
+  # Error class used when NO responses are received.
   @CommandFailure = class CommandFailure extends Error
     constructor: (resp) ->
       @name = "CommandFailure"
@@ -559,7 +561,7 @@ module.exports = class Client extends EventEmitter
   #uid: cmd
 
 
-tagChars = (String.fromCharCode i for i in [0x20..0x7E] when String.fromCharCode(i) not in ['(', ')', '{', ' ', '\\', '"', '%', '*', '+', ']'])
+tagChars = (new Buffer([0x20..0x7E])).toString().replace /[\(\)\{ \\"%\*\+\]]/g, ''
 tag = (tagCount)->
   count = tagCount++
   len = tagChars.length
@@ -573,7 +575,8 @@ tag = (tagCount)->
 
 # Format an RFC822 Datetime
 dateToDatetime = (d) ->
-  months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   com = ''
   com += '0' if d.getDate() < 10
   com += d.getDate() + '-'
