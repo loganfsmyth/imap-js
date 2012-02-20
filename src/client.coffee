@@ -7,8 +7,8 @@
 {EventEmitter} = require 'events'
 util = require 'util'
 
-constream = require './imap-connection'
-parser = require './async-parser'
+constream = require './connection'
+parser = require './parser'
 
 module.exports = class Client extends EventEmitter
   tagCount = 0
