@@ -53,10 +53,6 @@ module.exports = class Client extends EventEmitter
     @_con.on 'connect', =>
       @_con.pipe @_parser
 
-#    @_parser.on 'body', (args...) ->
-#      console.log util.inspect args, false, 20, true
-#      console.log args[0].toString()
-
     connected = false
     @_parser.on 'greeting', (greeting) =>
       return if connected
@@ -65,6 +61,7 @@ module.exports = class Client extends EventEmitter
     @_parser.on 'tagged', (args...) => @_onTagged args...
     @_parser.on 'untagged', (args...) => @_onUntagged args...
     @_parser.on 'continuation', (args...) => @_onContinuation args...
+    @_parser.on 'body', (args...) => @_onBody args...
 
     @_con.on 'timeout', =>
       if not connected
@@ -151,6 +148,9 @@ module.exports = class Client extends EventEmitter
       cb()
     else
       console.log 'wtf??'
+
+  _onBody: (chunk, body, remaining, name) ->
+    console.log arguments
 
   _handleCommand: ({command, response, continue: cont}, args, cb) ->
       t = tag()
