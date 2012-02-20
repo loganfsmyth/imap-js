@@ -1,27 +1,28 @@
 {
-  "name": "imap-native",
+  "name": "imap-js",
   "author": {
     "name": "Logan Smyth",
     "email": "loganfsmyth@gmail.com",
-    "url": "http://logansmyth.com",
+    "url": "http://logansmyth.com"
   },
-  "description": "An IMAP4rev1 client library. Parsing written in C for performance, similarly to the Node HTTP parser.",
-  "homepage": "http://github.com/loganfsmyth/imap-native",
+  "description": "An IMAP4rev1 client library.",
+  "homepage": "http://github.com/loganfsmyth/imap-js",
   "version": "0.1",
-
-  "main": "./index.js",
+  "main": "./lib/index.js",
   "repository": {
     "type": "git",
-    "url": "git://github.com/loganfsmyth.com/imap-native.git",
+    "url": "git://github.com/loganfsmyth/imap-js.git"
   },
-  "dependencies": [],
+  "dependencies": {
+    "iconv": "~1.1"
+  },
   "keywords": [
     "imap",
-    "native",
+    "client",
     "mail",
-    "email",
+    "email"
   ],
   "engines": {
-    "node": ">=0.4",
-  },
+    "node": ">=0.4"
+  }
 }
