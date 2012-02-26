@@ -1,5 +1,6 @@
 
 client = require './client'
+ooclient = require './ooclient'
 
 # Rather than document these in several places, just view the 'client.coffee'
 # file for documentation.
@@ -8,4 +9,5 @@ exports.Client = client
 exports.CommandError = client.CommandError
 exports.CommandFailure = client.CommandFailure
 
-
+exports.createOOClient = ooclient.createClient
+exports.OOClient = ooclient

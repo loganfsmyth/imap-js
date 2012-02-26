@@ -360,7 +360,6 @@ body_section_data = ->
   space_cb = sp()
   body_cb = starts_with 'N', nil(), string('body')
 
-
   (id) ->
     section_handler = section_cb()
     partial_handler = partial_cb()
@@ -371,7 +370,9 @@ body_section_data = ->
       if section_handler
         sec = section_handler data
         return if typeof sec == 'undefined'
-        body_data.section = sec
+        console.log sec
+        body_data.section = sec[0]
+        body_data.key = sec[1].toString 'ascii'
         section_handler = null
       if partial_handler
         par = partial_handler data
@@ -386,6 +387,7 @@ body_section_data = ->
       res = body_handler data
       return if typeof res == 'undefined'
       body_data.value = res
+      body_data.key += "<#{body_data.partial}>" if body_data.partial
       return body_data
 
 msg_att = ->
@@ -393,7 +395,7 @@ msg_att = ->
   body_struc = series [ sp(), body() ], 1
   rfc_text = series [ sp(), nstring() ], 1
 
-  paren_wrap space_list zip ['type', 'value'], route
+  cb = paren_wrap space_list route
     'FLAGS': series [ sp(), paren_wrap(space_list(flag(false), ')')) ], 1
     'ENVELOPE': series [ sp(), envelope() ], 1
     'INTERNALDATE': series [ sp(), date_time() ], 1
@@ -404,6 +406,15 @@ msg_att = ->
     'BODYSTRUCTURE': body_struc
     'BODY': starts_with ' ', body_struc, body_section_data()
     'UID': series [ sp(), uniqueid() ], 1
+
+  onres cb, (val) ->
+    result = {}
+    for v in val
+      [type, data] = v
+      if type == 'BODY' and data.key
+        type += data.key
+      result[type] = data
+    return result
 
 envelope = ->
   cb = paren_wrap series [
@@ -646,7 +657,18 @@ body = cache ->
   paren_wrap starts_with '(', body_type_mpart(), body_type_1part()
 
 section = ->
-  bracket_wrap starts_with ']', null_resp(), section_spec()
+  cb = bracket_wrap starts_with ']', null_resp(), section_spec()
+
+  ->
+    handler = cb()
+    col = collector()
+    (data) ->
+      start = data.pos
+      result = handler data
+      end = data.pos
+      col data.buf[start...end]
+      return if typeof result == 'undefined'
+      [result, col()]
 
 section_msgtext = (showmine) ->
   routes =
@@ -662,6 +684,8 @@ section_msgtext = (showmine) ->
 
 section_spec = ->
   starts_with 'H', section_msgtext(), starts_with 'T', section_msgtext(), section_parts()
+
+
 
 
 section_parts = ->

@@ -74,10 +74,13 @@ module.exports = class Client extends EventEmitter
 
     # To make testing easier, allow a stream to be passed in for simpler dummy testing.
     @_con = options.stream || constream.createConnection options
+    if Client.debug
+      @_con.on 'data', (c) -> console.error c.toString 'utf8'
 
     # Generate the client parser and pipe all data from the stream into it.
     @_parser = parser.createParser parser.CLIENT
     @_con.pipe @_parser
+
 
     # Proxy all events from the parser to helper functions for processing.
     @_parser.on 'greeting',     (args...) => @_onGreeting args...
@@ -212,6 +215,9 @@ module.exports = class Client extends EventEmitter
       when "FETCH"
         @_response.fetch ?= {}
         @_response.fetch[resp.id] = resp.value
+        for own k,v of resp.value
+          delete resp.value[k]
+          resp.value[k.toLowerCase()] = v
       else
         console.log "Unexpected response type: " + type
 
@@ -274,14 +280,16 @@ module.exports = class Client extends EventEmitter
       command = command.apply @, args if typeof command == 'function'
       command = t + ' ' + command + '\r\n'
       @_con.write command
-
+      
+      if Client.debug
+        console.error command
       # Set response callback based on the tag. Default to standard callback,
       # but if a specific response callback is provided, then delegate to that
       # instead.
       @_respCallbacks[t] = if not response
         (err, resp) -> cb err, null, resp
       else
-        (err, resp) => response.call @, err, resp, cb
+        (err, resp) => response.call @, err, resp, cb, args
 
       # Generate and queue a continuation callback if provided.
       if cont
@@ -385,8 +393,9 @@ module.exports = class Client extends EventEmitter
 
   status: cmd
     command: (mailbox, item_names) -> "STATUS #{q mailbox} (#{item_names.join ' '})"
-    response: (err, resp, cb) ->
-      cb err, resp.status, resp
+    response: (err, resp, cb, args) ->
+      [mailbox, item_names] = args
+      cb err, resp.status[mailbox], resp
 
   append: cmd
     command: (mailbox, flags, datetime, bytes, stream) ->
@@ -492,7 +501,7 @@ module.exports = class Client extends EventEmitter
   # * NOT < crit >
   #
   search: cmd
-    command: (crit) -> 'SEARCH CHARSET UTF-8 ' + @_searchCriteria crit
+    command: (crit, uid) -> (uid and 'UID ' or '') + 'SEARCH CHARSET UTF-8 ' + @_searchCriteria crit
     response: (err, resp, cb) ->
       cb err, resp.search, resp
 
@@ -521,13 +530,13 @@ module.exports = class Client extends EventEmitter
   # * RFC822, RFC822.HEADER, RFC822.SIZE, RFC822.TEXT
   # * UID
   fetch: cmd
-    command: (seq, crit) ->
+    command: (seq, crit, uid) ->
       if Array.isArray seq
         seq = seq.join ','
       seq = (''+seq).replace ' ', '' # No whitespace
 
-      com = "FETCH " + seq
-      com += ' ' + @_fetchCriteria crit
+      com = (uid and 'UID ' or '') + "FETCH " + seq
+      com += " (#{@_fetchCriteria crit})"
     response: (err, resp, cb) ->
       cb err, resp.fetch, resp
 
@@ -536,12 +545,12 @@ module.exports = class Client extends EventEmitter
 
 
   store: cmd
-    command: (seq, op, flags) ->
+    command: (seq, op, flags, uid) ->
       if Array.isArray seq
         seq = seq.join ','
       seq = (''+seq).replace ' ', '' # No whitespace
 
-      com = "STORE " + seq + ' '
+      com = (uid and 'UID ' or '') + "STORE " + seq + ' '
       com += switch op
         when 'add' then '+'
         when 'set' then ''
@@ -552,11 +561,11 @@ module.exports = class Client extends EventEmitter
       cb err, resp.fetch, resp
 
   copy: cmd
-    command: (seq, mailbox) ->
+    command: (seq, mailbox, uid) ->
       if Array.isArray seq
         seq = seq.join ','
       seq = (''+seq).replace ' ', '' # No whitespace
-      return "COPY " + seq + ' ' + q mailbox
+      return (uid and 'UID ' or '') + "COPY " + seq + ' ' + q mailbox
 
   #uid: cmd
 
