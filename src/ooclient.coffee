@@ -97,6 +97,7 @@ class Mailbox extends EventEmitter
 
 class MessageSet extends EventEmitter
   constructor: (@client, @sequence) ->
+    @loaded = false
 
   setflags: (flags, cb) -> @client.store @sequence, 'set', flags, true, cb
   addflags: (flags, cb) -> @client.store @sequence, 'add', flags, true, cb
@@ -109,17 +110,25 @@ class MessageSet extends EventEmitter
       cb err, new MessageSet @client, ids
 
   load: (cb) ->
+    return cb null if @loaded
+
     @client.fetch @sequence, 'ENVELOPE FLAGS INTERNALDATE UID', true, (err, msgs) =>
-      messages = {}
+      @loaded = true
+      max = 0
+      console.log msgs
       for own k, msg of msgs
+        k = parseInt k, 10
         m = new Message @client
         m._setMsg msg
-        messages[k] = m
-      cb err, messages
+        @[k] = m
+        max = k if k > max
+      @length = max
+      cb err
 
 class Message extends EventEmitter
   constructor: (@client, uid) ->
     @uid = uid if uid?
+    @loaded = false
 
   _setMsg: (msg) ->
     {
@@ -130,8 +139,15 @@ class Message extends EventEmitter
       }
     } = msg
 
+  setflags: (flags, cb) -> @client.store @uid, 'set', flags, true, cb
+  addflags: (flags, cb) -> @client.store @uid, 'add', flags, true, cb
+  delflags: (flags, cb) -> @client.store @uid, 'del', flags, true, cb
+  copyTo: (mailbox, cb) -> @client.copy @uid, mailbox, true, cb
+
   load: (cb) ->
     return cb new Error "Cannot load message data with no UID" if not @uid?
+    return cb null if @loaded
+    @loaded = true
 
     @client.fetch @uid, 'ENVELOPE FLAGS INTERNALDATE UID', true, (err, msgs) =>
       @_setMsg msgs[@uid] if msgs[@uid]?
