@@ -370,7 +370,6 @@ body_section_data = ->
       if section_handler
         sec = section_handler data
         return if typeof sec == 'undefined'
-        console.log sec
         body_data.section = sec[0]
         body_data.key = sec[1].toString 'ascii'
         section_handler = null
@@ -1028,6 +1027,7 @@ quoted_inner = (emit)->
 
       col data.buf[data.pos+start...] if start != data.buf.length
       data.pos = data.buf.length
+      return
 
 literal = (emit) ->
   size = literal_size()
@@ -1428,10 +1428,6 @@ onres = (cb, res_cb) ->
       return if typeof result == 'undefined'
 
       return res_cb result, args...
-
-l = (data) ->
-  console.log data.buf[data.pos...]
-  console.log data.buf.toString('utf8', data.pos)
 
 greeting = greeting()
 response = response()

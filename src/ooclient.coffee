@@ -150,13 +150,16 @@ class Message extends EventEmitter
   _processSections: (structure) ->
       if Array.isArray structure.body
         result = {}
-        for i, data in structure.body
+        for data, i in structure.body
+          k = i+1
           data = @_processSections data
           if data['']
-            result[i] = data['']
+            result[k] = data['']
+          else if data.body
+            result[k] = data.body
           else
             for j, body of data
-              result["#{i}.#{j}"] = body
+              result["#{k}.#{j}"] = body
         return result
       else
         return {'': structure}
@@ -181,7 +184,8 @@ class Message extends EventEmitter
 
   _loadBody: (section, cb) ->
     crit = 'BODY'
-    crit += "[#{section}]" if section or section == ''
+    section += 'TEXT' if section == ''
+    crit += "[#{section}]" if section
     @client.fetch @uid, crit, true, (err, msgs) =>
       crit = crit.toLowerCase()
       for own id, msg of msgs when msg.uid == @uid
