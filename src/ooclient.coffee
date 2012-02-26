@@ -148,25 +148,42 @@ class Message extends EventEmitter
       cb err
 
   _processSections: (structure) ->
-      if Array.isArray structure.body
-        result = {}
-        for data, i in structure.body
-          k = i+1
-          data = @_processSections data
-          if data['']
-            result[k] = data['']
-          else if data.body
-            result[k] = data.body
-          else
-            for j, body of data
-              result["#{k}.#{j}"] = body
-        return result
-      else
-        return {'': structure}
+    if Array.isArray structure.body
+      result = {}
+      for data, i in structure.body
+        k = i+1
+        data = @_processSections data
+        if data['']
+          result[k] = data['']
+        else if data.body
+          result[k] = data.body
+        else
+          for j, body of data
+            result["#{k}.#{j}"] = body
+      return result
+    else
+      return {'': structure}
 
   _getSection: (it, cb) ->
     handler = (err) =>
+      # console.log require('util').inspect @sections, false, 20, true
       cb err, (s for s, data of @sections when it data)
+    if not @sections
+      @structure handler
+    else
+      handler()
+
+  attachments: (cb) ->
+    handler = (err) =>
+      all = for s, data of @sections when data.ext?.dsp?.name == 'attachment'
+        section: s
+        filename: (n.value for n in data.body.fields.param when n.key == 'name')[0]
+        encoding: data.body.fields.enc
+        size: data.body.fields.octets
+        type: data.body.type
+        subtype: data.body.subtype
+      cb err, all
+
     if not @sections
       @structure handler
     else
@@ -175,22 +192,35 @@ class Message extends EventEmitter
   body: (fulltype, cb) ->
     return cb new Error "Cannot load a message with no UID" if not @uid?
     @_getSection (data) ->
-        {type, subtype} = data.body
-        return fulltype == "#{type}/#{subtype}"
+      {type, subtype} = data.body
+      return fulltype == "#{type}/#{subtype}"
     , (err, sections) =>
       return cb new Error "Body type not found" if not sections.length
       @_loadBody sections[0], cb
 
+  attachment: (section, s, cb) ->
+    @_loadBody section, s, cb
 
-  _loadBody: (section, cb) ->
+  _loadBody: (section, wstream, cb) ->
+    if typeof wstream == 'function'
+      cb = wstream
+      wstream = null
+
     crit = 'BODY'
-    section += 'TEXT' if section == ''
+    section = 'TEXT' if section == ''
     crit += "[#{section}]" if section
     @client.fetch @uid, crit, true, (err, msgs) =>
       crit = crit.toLowerCase()
       for own id, msg of msgs when msg.uid == @uid
-        return cb err, msg[crit].value
-      return
+        if wstream
+          if not err
+            wstream.write msg[crit].value
+          wstream.end()
+          return cb err
+        else
+          return cb err, msg[crit].value
 
+      wstream.end() if not wstream
+      return
 
 
