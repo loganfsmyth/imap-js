@@ -10,6 +10,10 @@ The objective of this project is to write a fast parser for the IMAP protocol
 by taking the complex tokenizing step out of javascript and moving it to C, while 
 keeping the object generation and general client libraries in Javascript for simplicity.
 
+# Unsupported
+
+There are [other modules](https://github.com/mscdex/node-imap) that support IMAP that have active maintainers. This module is here for those interested in IMAP and ended up mostly being a nice test for me and it was a great way to learn IMAP, but I would not recommend it for production use.
+
 # API
 
 ## ImapClient
